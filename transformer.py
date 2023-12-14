@@ -1,5 +1,4 @@
-import tensorflow as tf
-from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.optimizers import Adam, AdamW
 from tensorflow.keras.optimizers.schedules import LearningRateSchedule
 from tensorflow.keras.metrics import Mean
 from tensorflow import (
@@ -15,12 +14,13 @@ from tensorflow import (
     TensorSpec,
     function,
     int64,
+    float32,
 )
 from keras.losses import sparse_categorical_crossentropy
 from model import TransformerModel
 from prepare_dataset import PrepareDataset
 from time import time
-
+import sys
 
 # Define the model parameters
 h = 8  # Number of self-attention heads
@@ -31,7 +31,7 @@ d_ff = 2048  # Dimensionality of the inner fully connected layer
 n = 6  # Number of layers in the encoder stack
 
 # Define the training parameters
-epochs = 2
+epochs = 10
 batch_size = 64
 beta_1 = 0.9
 beta_2 = 0.98
@@ -51,14 +51,14 @@ class LRScheduler(LearningRateSchedule):
     def __call__(self, step_num):
         # Linearly increasing the learning rate for the first warmup_steps, and decreasing it thereafter
         step_num = step_num + 1
-        arg1 = tf.cast(step_num, tf.float32) ** -0.5
-        arg2 = tf.cast(step_num, tf.float32) * (self.warmup_steps ** -1.5)
+        arg1 = cast(step_num, float32) ** -0.5
+        arg2 = cast(step_num, float32) * (self.warmup_steps ** -1.5)
 
         return (self.d_model ** -0.5) * math.minimum(arg1, arg2)
 
 
 # Instantiate an Adam optimizer
-optimizer = Adam(LRScheduler(d_model), beta_1, beta_2, epsilon)
+optimizer = AdamW(LRScheduler(d_model), beta_1, beta_2, epsilon)
 
 # Prepare the training and test splits of the dataset
 dataset = PrepareDataset()
@@ -72,9 +72,15 @@ dataset = PrepareDataset()
     dec_vocab_size,
 ) = dataset("english-german-both.pkl")
 
+print("type of trainX: %s" % type(trainX))
+print("type of trainY: %s" % type(trainY))
 # Prepare the dataset batches
 train_dataset = data.Dataset.from_tensor_slices((trainX, trainY))
+print("Dataset size: %s" % len(train_dataset))
+print("Dataset type: %s" % type(train_dataset))
 train_dataset = train_dataset.batch(batch_size)
+print("Batch size: %s" % batch_size)
+print("Number of batches: %s" % len(train_dataset))
 
 # Create model
 training_model = TransformerModel(
