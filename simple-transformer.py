@@ -1,14 +1,20 @@
 #!/usr/bin/env python3
 
+import sys
 import numpy as np
 import tensorflow as tf
 from config import GatoConfig
 from typing import Dict, Any, Union
 from tensorflow.keras.models import Model
 from tensorflow.keras import layers, models, activations
+from tensorflow.keras.preprocessing.sequence import pad_sequences
+from tensorflow.keras.datasets import imdb
+from tensorflow.keras.models import load_model
+from tensorflow.keras.losses import SparseCategoricalCrossentropy
 
 # from tensorflow.keras.layers import Input, Embedding, Dense, LayerNormalization, MultiHeadAttention, Dropout
-from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.optimizers import Adam, AdamW
+
 
 # From Gato
 class TransformerBlock(Model):
@@ -17,7 +23,7 @@ class TransformerBlock(Model):
         config: Union[GatoConfig, Dict[str, Any]],
         trainable: bool = True,
         name: str = None,
-        **kwargs
+        **kwargs,
     ):
         super(TransformerBlock, self).__init__(trainable=trainable, name=name, **kwargs)
         if isinstance(config, dict):
@@ -82,20 +88,51 @@ class TransformerBlock(Model):
 
     def get_config(self):
         config = super(TransformerBlock, self).get_config()
-        config.update({
-            'config': self.config.to_dict(),
-        })
+        config.update(
+            {
+                "config": self.config.to_dict(),
+            }
+        )
         return config
-    
 
 
 config = GatoConfig.small()
 
-vocab_size = 128  # TODO - change to 768 example vocabulary size
+vocab_size = 100  # TODO - change to 768 example vocabulary size
 embed_dim = 128  # example embedding size
 hidden_dim = 128  # example hidden dimension size
 num_heads = 2  # example number of heads for attention
 input_length = 128  # example input length
+
+
+class Transformer(models.Model):
+    def __init__(
+        self,
+        config: Union[GatoConfig, Dict[str, Any]],
+        trainable: bool = True,
+        name: str = None,
+        **kwargs,
+    ):
+        super(Transformer, self).__init__(trainable=trainable, name=name, **kwargs)
+        if isinstance(config, dict):
+            config = GatoConfig(**config)
+        self.config = config
+        self.encoders = [
+            TransformerBlock(
+                config=self.config, trainable=trainable, name="EncoderBlock{}".format(idx)
+            )
+            for idx in range(self.config.num_transformer_blocks)
+        ]
+
+    def call(self, inputs, training=None, mask=None):
+        x = inputs
+        for encoder in self.encoders:
+            x = encoder(x)
+        return x
+
+    def get_config(self):
+        return super(Transformer, self).get_config()
+
 
 # Model definition
 inputs = layers.Input(shape=(input_length,))
@@ -109,23 +146,49 @@ for encoder in range(config.num_transformer_blocks):
 
 outputs = layers.Dense(vocab_size, activation="softmax")(x)
 
+#------------------------------------------------------------
 # define the model
-model = Model(inputs=inputs, outputs=outputs)
+# model = Model(inputs=inputs, outputs=outputs)
 
 # compile the model
-model.compile(optimizer=Adam(), loss="sparse_categorical_crossentropy")
+# model.compile(optimizer=AdamW(), loss="sparse_categorical_crossentropy")
 
 # example training data
-x_train = np.random.randint(vocab_size, size=(1000, input_length))
-y_train = np.random.randint(vocab_size, size=(1000, input_length, 1))
+# x_train = np.random.randint(vocab_size, size=(100, input_length))
+# y_train = np.random.randint(vocab_size, size=(100, input_length, 1))
 
 # train the model
+# model.fit(x_train, y_train, epochs=10, batch_size=32)
+#------------------------------------------------------------
+
+model = Transformer(config)
+model.compile(optimizer=Adam(), loss="mean_absolute_error")
+
+x_train = np.random.random((1, 132, 768)).astype(np.float32)
+y_train = np.random.random((1, 132, 768)).astype(np.float32)
+
+hidden_states = model(x_train)
+print("hidden_states shape: {}".format(hidden_states.shape))
+
+print("x_train shape: {}".format(x_train.shape))
+print("y_train shape: {}".format(y_train.shape))
+
+print("Training model")
 model.fit(x_train, y_train, epochs=10, batch_size=32)
 
-# Example inference
-x_test = np.random.randint(vocab_size, size=(1, input_length))
-y_pred = model.predict(x_test)
+# model(input)
+print("Done calling model with input")
+
+# Print model info
+# model.summary()
+
+model.evaluate(x_train, y_train, verbose=2)
+
+print("Running model.predict")
+input = np.random.random((1, 132, 768)).astype(np.float32)
+y_pred = model.predict(input)
 print(y_pred.shape)
 
+# Softmax
 y = layers.Dense(1, activation="softmax")(y_pred)
 print(y.shape)
