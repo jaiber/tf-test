@@ -22,7 +22,7 @@ class Gato(models.Model):
         self.transformer = Transformer(config, trainable=trainable, name='Transformers')
         self.local_pos_encoding = LocalPositionEncoding(config, trainable=trainable, name='LocalPositionEncoding')
 
-    def call(self, inputs, training=None, mask=None):
+    def embedding(self, inputs, training=None, mask=None):
         # input_ids with (B, L, 768)
         # encoding with (B, L) or (B,)
         # row_pos and col_pos with tuple of (pos_from, pos_to)
@@ -50,9 +50,17 @@ class Gato(models.Model):
         # add local observation position encodings
         embed = image_embed + continuous_embed + discrete_embed
         embed += self.local_pos_encoding((obs_pos, obs_mask))
+        return embed
 
+    def call(self, inputs, training=None, mask=None):
+        embed = self.embedding(inputs, training=training)
         hidden_states = self.transformer(embed)
         return hidden_states
+    
+    def train_transformer(self, x_train, y_train, epochs=10, batch_size=32, verbose=2, optimizer=tf.keras.optimizers.AdamW(), 
+                          loss="mean_absolute_error"):
+        self.transformer.compile(optimizer=optimizer, loss=loss)
+        self.transformer.fit(x_train, y_train, epochs=epochs, batch_size=batch_size, verbose=verbose)
 
     def get_config(self):
         return super(Gato, self).get_config()
