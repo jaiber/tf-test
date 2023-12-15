@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 
 import sys
+import argparse
 import numpy as np
 import tensorflow as tf
 from config import GatoConfig
+from loader import DataLoader
 from typing import Dict, Any, Union
 from tensorflow.keras.models import Model
 from tensorflow.keras import layers, models, activations
@@ -114,6 +116,11 @@ class Transformer(models.Model):
 
 
 if __name__ == "__main__":
+    # Parse arguments
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--epochs", type=int, default=10)
+    parser.add_argument("--batch_size", type=int, default=32)
+    args = parser.parse_args()
 
     config = GatoConfig.small()
 
@@ -124,14 +131,14 @@ if __name__ == "__main__":
     y_train = np.random.random((1, 132, 768)).astype(np.float32)
     print("x_train shape: {}".format(x_train.shape))
     print("y_train shape: {}".format(y_train.shape))
-  
+
     print("Training model")
-    model.fit(x_train, y_train, epochs=10, batch_size=32)
+    model.fit(x_train, y_train, epochs=args.epochs, batch_size=args.batch_size, verbose=2)
 
     print("Running model in training mode")
     hidden_states = model(x_train)
     print("hidden_states shape: {}".format(hidden_states.shape))
-    
+
     # Print model info
     # model.summary()
 
