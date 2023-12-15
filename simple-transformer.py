@@ -4,14 +4,10 @@ import sys
 import argparse
 import logging
 import numpy as np
-from gato import Gato, Transformer
+from gato import Gato
 import tensorflow as tf
 from config import GatoConfig
 from loader import DataLoader
-from typing import Dict, Any, Union
-from tensorflow.keras.models import Model
-from tensorflow.keras import layers, models, activations
-from tensorflow.keras.optimizers import Adam, AdamW
 
 
 if __name__ == "__main__":
