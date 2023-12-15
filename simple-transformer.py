@@ -32,7 +32,7 @@ if __name__ == "__main__":
     )
     logging.info("Embedding shape: {}".format(embedding.shape))
     x_train = embedding
-    y_train = np.random.random((1, 132, 768)).astype(np.float32)
+    y_train = np.random.random(x_train.shape).astype(np.float32)
 
     print("Training model")
     gato_model.train_transformer(
