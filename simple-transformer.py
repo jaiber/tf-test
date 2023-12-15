@@ -7,12 +7,6 @@ from config import GatoConfig
 from typing import Dict, Any, Union
 from tensorflow.keras.models import Model
 from tensorflow.keras import layers, models, activations
-from tensorflow.keras.preprocessing.sequence import pad_sequences
-from tensorflow.keras.datasets import imdb
-from tensorflow.keras.models import load_model
-from tensorflow.keras.losses import SparseCategoricalCrossentropy
-
-# from tensorflow.keras.layers import Input, Embedding, Dense, LayerNormalization, MultiHeadAttention, Dropout
 from tensorflow.keras.optimizers import Adam, AdamW
 
 
@@ -32,9 +26,6 @@ class TransformerBlock(Model):
 
         self.attention = self.feed_forward = self.dropout = None
         self.layer_norm1 = self.layer_norm2 = None
-
-        self.dense = layers.Dense(hidden_dim)
-        self.layernorm = layers.LayerNormalization(epsilon=1e-6)
 
     def build(self, input_shape):
         input_shape = tf.TensorShape(input_shape)
@@ -82,9 +73,6 @@ class TransformerBlock(Model):
         x = x + residual
 
         return x
-        # attn_output = self.dense(inputs)
-        # out = self.layernorm(tf.cast(inputs, float) + attn_output)
-        # return out
 
     def get_config(self):
         config = super(TransformerBlock, self).get_config()
@@ -94,15 +82,6 @@ class TransformerBlock(Model):
             }
         )
         return config
-
-
-config = GatoConfig.small()
-
-vocab_size = 100  # TODO - change to 768 example vocabulary size
-embed_dim = 128  # example embedding size
-hidden_dim = 128  # example hidden dimension size
-num_heads = 2  # example number of heads for attention
-input_length = 128  # example input length
 
 
 class Transformer(models.Model):
@@ -134,61 +113,37 @@ class Transformer(models.Model):
         return super(Transformer, self).get_config()
 
 
-# Model definition
-inputs = layers.Input(shape=(input_length,))
+if __name__ == "__main__":
 
-embedding_layer = layers.Embedding(input_dim=vocab_size, output_dim=embed_dim)
-x = embedding_layer(inputs)
+    config = GatoConfig.small()
 
-transformer_block = TransformerBlock(config)
-for encoder in range(config.num_transformer_blocks):
-    x = transformer_block(x)
+    model = Transformer(config)
+    model.compile(optimizer=AdamW(), loss="mean_absolute_error")
 
-outputs = layers.Dense(vocab_size, activation="softmax")(x)
+    x_train = np.random.random((1, 132, 768)).astype(np.float32)
+    y_train = np.random.random((1, 132, 768)).astype(np.float32)
+    print("x_train shape: {}".format(x_train.shape))
+    print("y_train shape: {}".format(y_train.shape))
+  
+    print("Training model")
+    model.fit(x_train, y_train, epochs=10, batch_size=32)
 
-#------------------------------------------------------------
-# define the model
-# model = Model(inputs=inputs, outputs=outputs)
+    print("Running model in training mode")
+    hidden_states = model(x_train)
+    print("hidden_states shape: {}".format(hidden_states.shape))
+    
+    # Print model info
+    # model.summary()
 
-# compile the model
-# model.compile(optimizer=AdamW(), loss="sparse_categorical_crossentropy")
+    print("Running model.evaluate")
+    model.evaluate(x_train, y_train, verbose=2)
 
-# example training data
-# x_train = np.random.randint(vocab_size, size=(100, input_length))
-# y_train = np.random.randint(vocab_size, size=(100, input_length, 1))
+    print("Running model.predict")
+    input = np.random.random((1, 132, 768)).astype(np.float32)
+    y_pred = model.predict(input)
+    print(y_pred.shape)
 
-# train the model
-# model.fit(x_train, y_train, epochs=10, batch_size=32)
-#------------------------------------------------------------
-
-model = Transformer(config)
-model.compile(optimizer=Adam(), loss="mean_absolute_error")
-
-x_train = np.random.random((1, 132, 768)).astype(np.float32)
-y_train = np.random.random((1, 132, 768)).astype(np.float32)
-
-hidden_states = model(x_train)
-print("hidden_states shape: {}".format(hidden_states.shape))
-
-print("x_train shape: {}".format(x_train.shape))
-print("y_train shape: {}".format(y_train.shape))
-
-print("Training model")
-model.fit(x_train, y_train, epochs=10, batch_size=32)
-
-# model(input)
-print("Done calling model with input")
-
-# Print model info
-# model.summary()
-
-model.evaluate(x_train, y_train, verbose=2)
-
-print("Running model.predict")
-input = np.random.random((1, 132, 768)).astype(np.float32)
-y_pred = model.predict(input)
-print(y_pred.shape)
-
-# Softmax
-y = layers.Dense(1, activation="softmax")(y_pred)
-print(y.shape)
+    # Softmax
+    print("Running softmax")
+    y = layers.Dense(1, activation="softmax")(y_pred)
+    print(y.shape)
