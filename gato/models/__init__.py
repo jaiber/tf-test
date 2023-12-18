@@ -53,8 +53,8 @@ class Gato(models.Model):
         return embed
 
     def call(self, inputs, training=None, mask=None):
-        embed = self.embedding(inputs, training=training)
-        hidden_states = self.transformer(embed)
+        inputs = self.embedding(inputs, training=training)
+        hidden_states = self.transformer(inputs, training=training)
         return hidden_states
     
     def train_transformer(self, x_train, y_train, epochs=10, batch_size=32, verbose=2, optimizer=tf.keras.optimizers.AdamW(), 
