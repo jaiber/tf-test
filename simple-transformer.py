@@ -25,7 +25,7 @@ if __name__ == "__main__":
     (all_ids, all_encoding, all_row_pos, all_col_pos, all_obs) = data.load()
 
     config = GatoConfig.small()
-    gato_model = Gato(config, trainable=True, name="Gato")
+    gato_model = Gato(config)
 
     embedding = gato_model.embedding(
         (all_ids, (all_encoding, all_row_pos, all_col_pos), all_obs)
@@ -34,13 +34,7 @@ if __name__ == "__main__":
     x_train = embedding
     y_train = np.random.random(x_train.shape).astype(np.float32)
 
-
-    print("Running model.fit")
-    gato_model.compile(optimizer=tf.keras.optimizers.AdamW(), loss="mean_absolute_error")
-    gato_model.fit(x_train, y_train, epochs=args.epochs, batch_size=args.batch_size, verbose=2)
-
-    sys.exit(0)
-
+    print("Training model")
     gato_model.train_transformer(
         x_train,
         y_train,
