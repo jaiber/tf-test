@@ -28,50 +28,37 @@ if __name__ == "__main__":
     gato_model = Gato(config, trainable=True, name="Gato")
 
     all_ids = tf.expand_dims(all_ids, axis=0)
+    all_encoding = tf.expand_dims(all_encoding, axis=0)
+    all_row_pos = (
+        tf.expand_dims(tf.cast(all_row_pos[0], tf.int32), axis=0),
+        tf.expand_dims(tf.cast(all_row_pos[1], tf.int32), axis=0),
+    )
+    all_col_pos = (
+        tf.expand_dims(tf.cast(all_col_pos[0], tf.int32), axis=0),
+        tf.expand_dims(tf.cast(all_col_pos[1], tf.int32), axis=0),
+    )
+    all_obs = (
+        tf.expand_dims(tf.cast(all_obs[0], tf.int32), axis=0),
+        tf.expand_dims(tf.cast(all_obs[1], tf.int32), axis=0),
+    )
 
     print("Running model in training mode")
     x_train = (all_ids, (all_encoding, all_row_pos, all_col_pos), all_obs)
     y_train = np.random.random((x_train[0].shape[0], 132, 768)).astype(np.float32)
-    gato_model.compile(
-        optimizer=tf.keras.optimizers.AdamW(), loss="mean_absolute_error"
-    )
+
+    print("Compiling model ================")
+    gato_model.compile(optimizer=tf.keras.optimizers.AdamW(), loss="mean_absolute_error")
 
     gato_model(x_train)
-    # print("model summary: ", gato_model.summary(expand_nested=True))
+    print("model summary: ", gato_model.summary(expand_nested=False))
+
+    print("Training the model ================")
+    gato_model.fit(x_train, y_train, epochs=args.epochs, batch_size=args.batch_size, verbose=2)
+
     # sys.exit(0)
-    gato_model.fit(
-        x_train, y_train, epochs=args.epochs, batch_size=args.batch_size, verbose=2
-    )
 
-    sys.exit(0)
-
-    embedding = gato_model.embedding(
-        (all_ids, (all_encoding, all_row_pos, all_col_pos), all_obs)
-    )
-    logging.info("Embedding shape: {}".format(embedding.shape))
-    x_train = embedding
-    y_train = np.random.random(x_train.shape).astype(np.float32)
-
-    print("Training model")
-    gato_model.train_transformer(
-        x_train,
-        y_train,
-        epochs=args.epochs,
-        batch_size=args.batch_size,
-        verbose=2,
-        optimizer=tf.keras.optimizers.AdamW(),
-        loss="mean_absolute_error",
-    )
-
-    # print("Running model in training mode")
-    # hidden_states = gato_model(x_train)
-    # print("hidden_states shape: {}".format(hidden_states.shape))
-
-    # Print model info
-    # model.summary()
-
-    # print("Running model.evaluate")
-    # gato_model.evaluate(x_train, y_train, verbose=2)
+    print("Running model.evaluate =================")
+    gato_model.evaluate(x_train, y_train, verbose=2)
 
     # print("Running model.predict")
     # input = np.random.random((1, 132, 768)).astype(np.float32)

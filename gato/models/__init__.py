@@ -28,38 +28,20 @@ class Gato(models.Model):
         # row_pos and col_pos with tuple of (pos_from, pos_to)
         # obs_pos and obs_mask with (B, L) or (B,)
         input_ids, (encoding, row_pos, col_pos), (obs_pos, obs_mask) = inputs
-        
-        """
-        # Remove first dimension
         input_ids = tf.squeeze(input_ids, axis=0)
-        # Add batch dimension
-        input_ids = tf.expand_dims(input_ids, axis=0)
-        print("i??? nput_ids shape:", input_ids.shape)
         encoding = tf.squeeze(encoding, axis=0)
-        encoding = tf.expand_dims(encoding, axis=0)
-        print("encoding shape:", encoding.shape)
-        row_pos = (tf.cast(tf.expand_dims(tf.squeeze(row_pos[0], axis=0), axis=0), tf.int32), 
-                   tf.cast(tf.expand_dims(tf.squeeze(row_pos[1], axis=0), axis=0), tf.int32))
-        #print("row_pos shape:", row_pos[0].shape, row_pos[1].dtype)
-        col_pos = (tf.cast(tf.expand_dims(tf.squeeze(col_pos[0], axis=0), axis=0), tf.int32), 
-                   tf.cast(tf.expand_dims(tf.squeeze(col_pos[1], axis=0), axis=0), tf.int32))
-        print("col_pos shape:", col_pos[0].shape)
-        #obs_pos = (tf.expand_dims(tf.squeeze(obs_pos[0], axis=0), axis=0), tf.expand_dims(tf.squeeze(obs_pos[1], axis=0), axis=0))
-        # Reshape to (1, 132)
-        shape = obs_pos[0].shape
-        print ("shape:", shape)
-        ob0 = tf.reshape(obs_pos[0], (1, shape[0]))
-        ob1 = tf.reshape(obs_pos[1], (1, shape[0]))
-        obs_pos = (ob0, ob1)
-        print("obs_pos shape:", obs_pos[0].shape)
-        #obs_mask = (tf.expand_dims(tf.squeeze(obs_mask[0], axis=0), axis=0), tf.expand_dims(tf.squeeze(obs_mask[1], axis=0), axis=0))
-        ob0 = tf.reshape(obs_mask[0], (1, shape[0]))
-        ob1 = tf.reshape(obs_mask[1], (1, shape[0]))
-        obs_mask = (ob0, ob1)
-        print("obs_mask shape:", obs_mask[0].shape)
-
-        """
-
+        row_pos = (tf.cast(tf.squeeze(row_pos[0], axis=0), tf.int32), tf.cast(tf.squeeze(row_pos[1], axis=0), tf.int32))
+        col_pos = (tf.cast(tf.squeeze(col_pos[0], axis=0), tf.int32), tf.cast(tf.squeeze(col_pos[1], axis=0), tf.int32))
+        obs_pos = tf.cast(tf.squeeze(obs_pos, axis=0), tf.int32)
+        obs_mask = tf.cast(tf.squeeze(obs_mask, axis=0), tf.int32)
+        #print ("input_ids shape: ", input_ids.shape)
+        #print ("encoding shape: ", encoding.shape)
+        #print ("row_pos shape: ", row_pos[0].shape)
+        #print ("col_pos shape: ", col_pos[0].shape)
+        #print ("obs_pos shape: ", obs_pos.shape)
+        #print ("obs_mask shape: ", obs_mask.shape)
+        
+        
         # Encoding flags for embed masks
         # 0 - image
         # 1 - continuous
@@ -82,10 +64,6 @@ class Gato(models.Model):
         # add local observation position encodings
         embed = image_embed + continuous_embed + discrete_embed
         embed += self.local_pos_encoding((obs_pos, obs_mask))
-     #   return embed
-
-    #def call(self, inputs, training=None, mask=None):
-    #    embed = self.embedding(inputs, training=training)
         hidden_states = self.transformer(embed)
         return hidden_states
     
