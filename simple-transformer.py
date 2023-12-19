@@ -44,8 +44,8 @@ if __name__ == "__main__":
 
     print("Running model in training mode")
     x_train = (all_ids, (all_encoding, all_row_pos, all_col_pos), all_obs)
-    y_train = np.random.random((x_train[0].shape[0], 132, 768)).astype(np.float32)
-
+    y_train = np.random.random((1, all_ids.shape[2], 768)).astype(np.float32)
+    
     print("Compiling model ================")
     gato_model.compile(optimizer=tf.keras.optimizers.AdamW(), loss="mean_absolute_error")
 
