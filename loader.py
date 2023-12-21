@@ -250,8 +250,8 @@ class DataLoader:
                 all_ids = input_ids
                 all_discrete = discrete_array
             else:
-                all_ids = tf.concat([all_ids, input_ids], axis=0)
-                all_discrete = tf.concat([all_discrete, discrete_array], axis=0)
+                all_ids = tf.concat([all_ids, input_ids], axis=1)
+                all_discrete = tf.concat([all_discrete, discrete_array], axis=1)
 
             encoding = self.create_encoding()
             logging.debug(" encoding shape: %s", encoding)
@@ -259,7 +259,7 @@ class DataLoader:
             if all_encoding is None:
                 all_encoding = encoding
             else:
-                all_encoding = tf.concat([all_encoding, encoding], axis=0)
+                all_encoding = tf.concat([all_encoding, encoding], axis=1)
             logging.debug("  encoding shape: %s", encoding.shape)
 
             row_pos = self.encode_row_pos()
@@ -268,8 +268,8 @@ class DataLoader:
                 all_row_pos = row_pos
             else:
                 all_row_pos = (
-                    tf.concat([all_row_pos[0], row_pos[0]], axis=0),
-                    tf.concat([all_row_pos[1], row_pos[1]], axis=0),
+                    tf.concat([all_row_pos[0], row_pos[0]], axis=1),
+                    tf.concat([all_row_pos[1], row_pos[1]], axis=1),
                 )
             logging.debug("  row_pos shape: %s, %s", row_pos[0].shape, row_pos[1].shape)
 
@@ -279,8 +279,8 @@ class DataLoader:
                 all_col_pos = col_pos
             else:
                 all_col_pos = (
-                    tf.concat([all_col_pos[0], col_pos[0]], axis=0),
-                    tf.concat([all_col_pos[1], col_pos[1]], axis=0),
+                    tf.concat([all_col_pos[0], col_pos[0]], axis=1),
+                    tf.concat([all_col_pos[1], col_pos[1]], axis=1),
                 )
             logging.debug("  col_pos shape: %s, %s", col_pos[0].shape, col_pos[1].shape)
 
@@ -294,8 +294,8 @@ class DataLoader:
                 all_obs = obs
             else:
                 all_obs = (
-                    tf.concat([all_obs[0], obs[0]], axis=0),
-                    tf.concat([all_obs[1], obs[1]], axis=0),
+                    tf.concat([all_obs[0], obs[0]], axis=1),
+                    tf.concat([all_obs[1], obs[1]], axis=1),
                 )
             logging.debug("  obs shape: %s, %s", obs[0].shape, obs[1].shape)
 
