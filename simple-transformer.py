@@ -16,8 +16,12 @@ def loss_function(y_true, y_pred):
     print ("y_pred shape: ", y_pred.shape)
     print ("y_pred: ", y_pred)
 
-    loss = 0.01
-    return loss
+    print("[dice_loss] y_pred=",y_pred,"y_true=",y_true)
+    y_true = tf.cast(y_true, tf.float32)
+    numerator = 2 * tf.reduce_sum(y_true * y_pred)
+    denominator = tf.reduce_sum(y_true + y_pred)
+
+    return 1 - numerator / denominator
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
@@ -33,8 +37,10 @@ if __name__ == "__main__":
     data = DataLoader(file)
     (input_tokens, sequence_encoding, row_pos, col_pos, obs_encoding, all_discrete) = data.load()
 
+    #sys.exit(0)
     config = GatoConfig.small()
     gato_model = Gato(config, trainable=True, name="Gato")
+
 
     # Adding batch dimension
     input_tokens = tf.expand_dims(
@@ -54,16 +60,30 @@ if __name__ == "__main__":
         tf.expand_dims(tf.cast(obs_encoding[1], tf.int32), axis=0),
     )
 
+
     x_train = (input_tokens, (sequence_encoding, row_pos, col_pos), obs_encoding)
-    # y_train = np.random.random((1, input_tokens.shape[2], 768)).astype(np.float32)
+    #y_train = np.random.random((1, 132, 3)).astype(np.float32)
+    y_train = np.random.randint(3, size=(1, 6, 3))
+
+    """
     y_train = all_discrete
     print("all_discrete shape: ", all_discrete.shape)
     y_train = tf.transpose(all_discrete)
-    print("all_discrete shape: ", all_discrete.shape)
+    print("all_discrete shape: ", y_train.shape)
+    tf.print(y_train.numpy())
+    y_train = tf.one_hot(y_train, depth=3, dtype=tf.int32)
+    print("y_train shape: ", y_train.shape)
     tf.print(y_train.numpy())
 
+    y_train = tf.reshape(y_train, (y_train.shape[1], y_train.shape[0], y_train.shape[2]))
+    """
+    print("y_train shape: ", y_train.shape)
+    #tf.print(y_train.numpy())
+
+    #sys.exit(0)
+
     print("Compiling model ================")
-    gato_model.compile(optimizer=tf.keras.optimizers.AdamW(), loss="mean_absolute_error")
+    gato_model.compile(optimizer=tf.keras.optimizers.Adam(), loss=loss_function, metrics=['accuracy'])
 
     gato_model(x_train)
     print("model summary: ", gato_model.summary(expand_nested=False))

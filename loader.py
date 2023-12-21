@@ -140,7 +140,7 @@ class DataLoader:
             tf.constant([arr2]),  # pos_to
         )
 
-    def encode_obs(self):
+    def encode_obs(self, mask_image=False, mask_continuous=False, mask_discrete=False):
         """Create obs tensor"""
 
         logging.info("Creating obs..")
@@ -149,7 +149,11 @@ class DataLoader:
         arr1 = arr1 * self.num_observations
         logging.debug("arr1: %s", arr1)
 
-        arr2 = [1] * (self.num_patches + 1) + [0]
+        imask = [0] if mask_image else [1]
+        cmask = [0] if mask_continuous else [1]
+        dmask = [0] if mask_discrete else [1]
+
+        arr2 = imask * (self.num_patches) + cmask + dmask # Don't mask discrete tokens
         arr2 = arr2 * self.num_observations
         logging.debug("arr2: %s", arr2)
 
@@ -163,7 +167,7 @@ class DataLoader:
 
         input_ids = None
         input_array = []
-        discrete_array = tf.Variable(tf.constant([], shape=(0, 1), dtype=tf.int32))
+        discrete_array = tf.Variable(tf.constant([], shape=(0,1), dtype=tf.int32))
 
         logging.debug("Loading episode_config: %s", episode_config_file)
         # Load episode config
@@ -181,7 +185,11 @@ class DataLoader:
 
                 image = self.image_to_patches(img_file)
                 continuous_value = self.encode_continuous_value(key["jointAngles"])
-                discrete_value = self.encode_discrete_value(key["action"])
+                # Check if its last step
+                if key == episode_config["steps"][-1]:
+                    discrete_value = self.encode_discrete_value(0)  # Alignment achieved
+                else:
+                    discrete_value = self.encode_discrete_value(key["action"])
 
                 input_array.append(image)
                 input_array.append(continuous_value)
@@ -194,11 +202,13 @@ class DataLoader:
                 input_array,  # repeat num_observations times
                 axis=1,
             )
+            
             logging.info("input_ids shape: %s", input_ids.shape)
             # tf.print(input_ids[0])
             return input_ids, discrete_array
 
-    def load(self):
+
+    def load(self, mask_image=False, mask_continuous=False, mask_discrete=False):
         """Load data from JSON files"""
 
         try:
@@ -274,7 +284,11 @@ class DataLoader:
                 )
             logging.debug("  col_pos shape: %s, %s", col_pos[0].shape, col_pos[1].shape)
 
-            obs = self.encode_obs()
+            obs = self.encode_obs(
+                mask_image=mask_image,
+                mask_continuous=mask_continuous,
+                mask_discrete=mask_discrete,
+            )
             # Append to all_obs
             if all_obs is None:
                 all_obs = obs
@@ -289,8 +303,12 @@ class DataLoader:
         logging.info("all_ids shape: %s", all_ids.shape)
         logging.info("all_discrete shape: %s", all_discrete.shape)
         logging.info("all_encoding shape: %s", all_encoding.shape)
-        logging.info("all_row_pos shape: %s, %s", all_row_pos[0].shape, all_row_pos[1].shape)
-        logging.info("all_col_pos shape: %s, %s", all_col_pos[0].shape, all_col_pos[1].shape)
+        logging.info(
+            "all_row_pos shape: %s, %s", all_row_pos[0].shape, all_row_pos[1].shape
+        )
+        logging.info(
+            "all_col_pos shape: %s, %s", all_col_pos[0].shape, all_col_pos[1].shape
+        )
         logging.info("all_obs shape: %s, %s", all_obs[0].shape, all_obs[1].shape)
 
         return (all_ids, all_encoding, all_row_pos, all_col_pos, all_obs, all_discrete)

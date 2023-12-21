@@ -39,7 +39,7 @@ class Gato(models.Model):
         )
 
         self.flatten = layers.Flatten()
-        self.dense = layers.Dense(1, activation="softmax", name="Output")
+        self.dense = layers.Dense(3, activation="softmax", name="Output")
 
     def call(self, inputs, training=None, mask=None):
         # input_ids with (B, L, 768)
@@ -48,6 +48,7 @@ class Gato(models.Model):
         # obs_pos and obs_mask with (B, L) or (B,)
         input_ids, (encoding, row_pos, col_pos), (obs_pos, obs_mask) = inputs
         # Strip batch dinmension
+        """
         input_ids = tf.squeeze(input_ids, axis=0)
         encoding = tf.squeeze(encoding, axis=0)
         row_pos = (
@@ -60,12 +61,13 @@ class Gato(models.Model):
         )
         obs_pos = tf.cast(tf.squeeze(obs_pos, axis=0), tf.int32)
         obs_mask = tf.cast(tf.squeeze(obs_mask, axis=0), tf.int32)
-        # print ("input_ids shape: ", input_ids.shape)
-        # print ("encoding shape: ", encoding.shape)
-        # print ("row_pos shape: ", row_pos[0].shape)
-        # print ("col_pos shape: ", col_pos[0].shape)
-        # print ("obs_pos shape: ", obs_pos.shape)
-        # print ("obs_mask shape: ", obs_mask.shape)
+        """
+        # print ("    input_ids shape: ", input_ids.shape)
+        # print ("    encoding shape: ", encoding.shape)
+        # print ("    row_pos shape: ", row_pos[0].shape)
+        # print ("    col_pos shape: ", col_pos[0].shape)
+        # print ("    obs_pos shape: ", obs_pos.shape)
+        # print ("    obs_mask shape: ", obs_mask.shape)
 
         # Encoding flags for embed masks
         # 0 - image
@@ -99,7 +101,7 @@ class Gato(models.Model):
         print("output shape: ", output.shape)
         tf.print(output)
         return output
-
+    
     def train_transformer(
         self,
         x_train,
