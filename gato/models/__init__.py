@@ -48,7 +48,7 @@ class Gato(models.Model):
         # obs_pos and obs_mask with (B, L) or (B,)
         input_ids, (encoding, row_pos, col_pos), (obs_pos, obs_mask) = inputs
         # Strip batch dinmension
-        """
+        
         input_ids = tf.squeeze(input_ids, axis=0)
         encoding = tf.squeeze(encoding, axis=0)
         row_pos = (
@@ -61,7 +61,7 @@ class Gato(models.Model):
         )
         obs_pos = tf.cast(tf.squeeze(obs_pos, axis=0), tf.int32)
         obs_mask = tf.cast(tf.squeeze(obs_mask, axis=0), tf.int32)
-        """
+        
         # print ("    input_ids shape: ", input_ids.shape)
         # print ("    encoding shape: ", encoding.shape)
         # print ("    row_pos shape: ", row_pos[0].shape)

@@ -63,24 +63,24 @@ if __name__ == "__main__":
 
     x_train = (input_tokens, (sequence_encoding, row_pos, col_pos), obs_encoding)
     #y_train = np.random.random((1, 132, 3)).astype(np.float32)
-    y_train = np.random.randint(3, size=(1, 6, 3))
+    y_train = np.random.randint(3, size=(1, 1, 3))
+    print ("y_train shape: ", y_train.shape)
+    
+    #y_train = all_discrete
+    #print("all_discrete shape: ", all_discrete.shape)
+    #y_train = tf.transpose(y_train))
+    #print("all_discrete shape: ", y_train.shape)
+    #tf.print(y_train.numpy())
+    #y_train = tf.one_hot(y_train, depth=3, dtype=tf.int32)
+    #print("y_train shape: ", y_train.shape)
+    #tf.print(y_train.numpy())
 
-    """
-    y_train = all_discrete
-    print("all_discrete shape: ", all_discrete.shape)
-    y_train = tf.transpose(all_discrete)
-    print("all_discrete shape: ", y_train.shape)
-    tf.print(y_train.numpy())
-    y_train = tf.one_hot(y_train, depth=3, dtype=tf.int32)
-    print("y_train shape: ", y_train.shape)
-    tf.print(y_train.numpy())
-
-    y_train = tf.reshape(y_train, (y_train.shape[1], y_train.shape[0], y_train.shape[2]))
-    """
+    #y_train = tf.reshape(y_train, (y_train.shape[1], y_train.shape[0], y_train.shape[2]))
+    
     print("y_train shape: ", y_train.shape)
     #tf.print(y_train.numpy())
 
-    #sys.exit(0)
+    # sys.exit(0)
 
     print("Compiling model ================")
     gato_model.compile(optimizer=tf.keras.optimizers.Adam(), loss=loss_function, metrics=['accuracy'])
