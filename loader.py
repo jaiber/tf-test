@@ -163,6 +163,7 @@ class DataLoader:
 
         input_ids = None
         input_array = []
+        discrete_array = tf.Variable(tf.constant([], shape=(0, 1), dtype=tf.int32))
 
         logging.debug("Loading episode_config: %s", episode_config_file)
         # Load episode config
@@ -185,6 +186,8 @@ class DataLoader:
                 input_array.append(image)
                 input_array.append(continuous_value)
                 input_array.append(discrete_value)
+                action = tf.constant([[key["action"]]], dtype=tf.int32)
+                discrete_array = tf.concat([discrete_array, action], axis=0)
 
             logging.debug("input_array size: %s", len(input_array))
             input_ids = tf.concat(
@@ -192,7 +195,8 @@ class DataLoader:
                 axis=1,
             )
             logging.info("input_ids shape: %s", input_ids.shape)
-            return input_ids
+            # tf.print(input_ids[0])
+            return input_ids, discrete_array
 
     def load(self):
         """Load data from JSON files"""
@@ -221,6 +225,7 @@ class DataLoader:
         all_row_pos = None
         all_col_pos = None
         all_obs = None
+        all_discrete = None
 
         # Loop through each episode config file
         # for episode_config_file in self.config["episodes"]:
@@ -228,13 +233,15 @@ class DataLoader:
             episode_config_file = prefix + self.config["episodes"][i]
             logging.debug("episode_config_file: %s", episode_config_file)
 
-            input_ids = self.process_episode(episode_config_file, prefix=prefix)
+            input_ids, discrete_array = self.process_episode(episode_config_file, prefix=prefix)
             logging.debug("input_ids shape: %s", input_ids.shape)
             # Append to all_ods
             if all_ids is None:
                 all_ids = input_ids
+                all_discrete = discrete_array
             else:
                 all_ids = tf.concat([all_ids, input_ids], axis=1)
+                all_discrete = tf.concat([all_discrete, discrete_array], axis=0)
 
             encoding = self.create_encoding()
             logging.debug(" encoding shape: %s", encoding)
@@ -280,13 +287,10 @@ class DataLoader:
 
         # Print shapes
         logging.info("all_ids shape: %s", all_ids.shape)
+        logging.info("all_discrete shape: %s", all_discrete.shape)
         logging.info("all_encoding shape: %s", all_encoding.shape)
-        logging.info(
-            "all_row_pos shape: %s, %s", all_row_pos[0].shape, all_row_pos[1].shape
-        )
-        logging.info(
-            "all_col_pos shape: %s, %s", all_col_pos[0].shape, all_col_pos[1].shape
-        )
+        logging.info("all_row_pos shape: %s, %s", all_row_pos[0].shape, all_row_pos[1].shape)
+        logging.info("all_col_pos shape: %s, %s", all_col_pos[0].shape, all_col_pos[1].shape)
         logging.info("all_obs shape: %s, %s", all_obs[0].shape, all_obs[1].shape)
 
-        return (all_ids, all_encoding, all_row_pos, all_col_pos, all_obs)
+        return (all_ids, all_encoding, all_row_pos, all_col_pos, all_obs, all_discrete)

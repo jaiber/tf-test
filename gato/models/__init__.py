@@ -1,26 +1,45 @@
 import tensorflow as tf
 
 from gato.models.transformer import TransformerBlock
-from gato.models.embedding import PatchPositionEncoding, ResidualEmbedding, LocalPositionEncoding, DiscreteEmbedding
+from gato.models.embedding import (
+    PatchPositionEncoding,
+    ResidualEmbedding,
+    LocalPositionEncoding,
+    DiscreteEmbedding,
+)
 from gato.models.tokenizers import ContinuousValueTokenizer
 
-from tensorflow.keras import models
+from tensorflow.keras import models, layers
 from gato import GatoConfig
 from typing import Dict, Any, Union
 
 
 class Gato(models.Model):
-
-    def __init__(self, config: Union[GatoConfig, Dict[str, Any]], trainable: bool = True, name: str = 'Gato', **kwargs):
+    def __init__(
+        self,
+        config: Union[GatoConfig, Dict[str, Any]],
+        trainable: bool = True,
+        name: str = "Gato",
+        **kwargs
+    ):
         super(Gato, self).__init__(trainable=trainable, name=name, **kwargs)
         if isinstance(config, dict):
             config = GatoConfig(**config)
         self.config = config
-        self.image_embedding = PatchEmbedding(config, trainable=trainable, name='ImagePatchEmbedding')
-        self.discrete_embedding = DiscreteEmbedding(config, trainable=trainable, name='DiscreteEmbedding')
-        self.continuous_encoding = ContinuousValueTokenizer(config, name='ContinuousValueEncoding')
-        self.transformer = Transformer(config, trainable=trainable, name='Transformers')
-        self.local_pos_encoding = LocalPositionEncoding(config, trainable=trainable, name='LocalPositionEncoding')
+        self.image_embedding = PatchEmbedding(
+            config, trainable=trainable, name="ImagePatchEmbedding"
+        )
+        self.discrete_embedding = DiscreteEmbedding(
+            config, trainable=trainable, name="DiscreteEmbedding"
+        )
+        self.continuous_encoding = ContinuousValueTokenizer(config, name="ContinuousValueEncoding")
+        self.transformer = Transformer(config, trainable=trainable, name="Transformers")
+        self.local_pos_encoding = LocalPositionEncoding(
+            config, trainable=trainable, name="LocalPositionEncoding"
+        )
+
+        self.flatten = layers.Flatten()
+        self.dense = layers.Dense(1, activation="softmax", name="Output")
 
     def call(self, inputs, training=None, mask=None):
         # input_ids with (B, L, 768)
@@ -28,20 +47,26 @@ class Gato(models.Model):
         # row_pos and col_pos with tuple of (pos_from, pos_to)
         # obs_pos and obs_mask with (B, L) or (B,)
         input_ids, (encoding, row_pos, col_pos), (obs_pos, obs_mask) = inputs
+        # Strip batch dinmension
         input_ids = tf.squeeze(input_ids, axis=0)
         encoding = tf.squeeze(encoding, axis=0)
-        row_pos = (tf.cast(tf.squeeze(row_pos[0], axis=0), tf.int32), tf.cast(tf.squeeze(row_pos[1], axis=0), tf.int32))
-        col_pos = (tf.cast(tf.squeeze(col_pos[0], axis=0), tf.int32), tf.cast(tf.squeeze(col_pos[1], axis=0), tf.int32))
+        row_pos = (
+            tf.cast(tf.squeeze(row_pos[0], axis=0), tf.int32),
+            tf.cast(tf.squeeze(row_pos[1], axis=0), tf.int32),
+        )
+        col_pos = (
+            tf.cast(tf.squeeze(col_pos[0], axis=0), tf.int32),
+            tf.cast(tf.squeeze(col_pos[1], axis=0), tf.int32),
+        )
         obs_pos = tf.cast(tf.squeeze(obs_pos, axis=0), tf.int32)
         obs_mask = tf.cast(tf.squeeze(obs_mask, axis=0), tf.int32)
-        #print ("input_ids shape: ", input_ids.shape)
-        #print ("encoding shape: ", encoding.shape)
-        #print ("row_pos shape: ", row_pos[0].shape)
-        #print ("col_pos shape: ", col_pos[0].shape)
-        #print ("obs_pos shape: ", obs_pos.shape)
-        #print ("obs_mask shape: ", obs_mask.shape)
-        
-        
+        # print ("input_ids shape: ", input_ids.shape)
+        # print ("encoding shape: ", encoding.shape)
+        # print ("row_pos shape: ", row_pos[0].shape)
+        # print ("col_pos shape: ", col_pos[0].shape)
+        # print ("obs_pos shape: ", obs_pos.shape)
+        # print ("obs_mask shape: ", obs_mask.shape)
+
         # Encoding flags for embed masks
         # 0 - image
         # 1 - continuous
@@ -65,30 +90,53 @@ class Gato(models.Model):
         embed = image_embed + continuous_embed + discrete_embed
         embed += self.local_pos_encoding((obs_pos, obs_mask))
         hidden_states = self.transformer(embed)
-        return hidden_states
-    
-    def train_transformer(self, x_train, y_train, epochs=10, batch_size=32, verbose=2, optimizer=tf.keras.optimizers.AdamW(), 
-                          loss="mean_absolute_error"):
+
+        output = self.flatten(hidden_states)
+        # Add dense softmax layer
+        output = self.dense(output)
+        # argmax
+        # output = tf.argmax(output, axis=-1)
+        print("output shape: ", output.shape)
+        tf.print(output)
+        return output
+
+    def train_transformer(
+        self,
+        x_train,
+        y_train,
+        epochs=10,
+        batch_size=32,
+        verbose=2,
+        optimizer=tf.keras.optimizers.AdamW(),
+        loss="mean_absolute_error",
+    ):
         self.transformer.compile(optimizer=optimizer, loss=loss)
-        self.transformer.fit(x_train, y_train, epochs=epochs, batch_size=batch_size, verbose=verbose)
+        self.transformer.fit(
+            x_train, y_train, epochs=epochs, batch_size=batch_size, verbose=verbose
+        )
 
     def get_config(self):
         return super(Gato, self).get_config()
 
 
 class Transformer(models.Model):
-
-    def __init__(self,
-                 config: Union[GatoConfig, Dict[str, Any]],
-                 trainable: bool = True,
-                 name: str = None,
-                 **kwargs):
+    def __init__(
+        self,
+        config: Union[GatoConfig, Dict[str, Any]],
+        trainable: bool = True,
+        name: str = None,
+        **kwargs
+    ):
         super(Transformer, self).__init__(trainable=trainable, name=name, **kwargs)
         if isinstance(config, dict):
             config = GatoConfig(**config)
         self.config = config
-        self.encoders = [TransformerBlock(config=self.config, trainable=trainable, name='EncoderBlock{}'.format(idx))
-                         for idx in range(self.config.num_transformer_blocks)]
+        self.encoders = [
+            TransformerBlock(
+                config=self.config, trainable=trainable, name="EncoderBlock{}".format(idx)
+            )
+            for idx in range(self.config.num_transformer_blocks)
+        ]
 
     def call(self, inputs, training=None, mask=None):
         x = inputs
@@ -101,18 +149,23 @@ class Transformer(models.Model):
 
 
 class PatchEmbedding(models.Model):
-
-    def __init__(self,
-                 config: Union[GatoConfig, Dict[str, Any]],
-                 trainable: bool = True,
-                 name: str = None,
-                 **kwargs):
+    def __init__(
+        self,
+        config: Union[GatoConfig, Dict[str, Any]],
+        trainable: bool = True,
+        name: str = None,
+        **kwargs
+    ):
         super(PatchEmbedding, self).__init__(trainable=trainable, name=name, **kwargs)
         if isinstance(config, dict):
             config = GatoConfig(**config)
         self.config = config
-        self.residual_embedding = ResidualEmbedding(config, trainable=trainable, name='ResidualEmbedding')
-        self.pos_encoding = PatchPositionEncoding(config, trainable=trainable, name='PatchPositionEncoding')
+        self.residual_embedding = ResidualEmbedding(
+            config, trainable=trainable, name="ResidualEmbedding"
+        )
+        self.pos_encoding = PatchPositionEncoding(
+            config, trainable=trainable, name="PatchPositionEncoding"
+        )
 
     def call(self, inputs, training=None, mask=None):
         input_ids, (row_pos, col_pos) = inputs
