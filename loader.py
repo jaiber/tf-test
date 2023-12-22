@@ -31,7 +31,7 @@ class DataLoader:
         """Load and extract image patches"""
 
         # Read PNG file
-        logging.info("Creating image tokens, read image: %s", image_file)
+        logging.debug("Creating image tokens, read image: %s", image_file)
         image = tf.io.read_file(image_file)
 
         image = tf.image.decode_png(image, channels=3)  # decode PNG
@@ -66,13 +66,13 @@ class DataLoader:
             arr.extend([0] * self.num_patches + [1, 2])
         # logging.debug("encoding: %s", arr)
 
-        logging.info("Creating encoding..")
+        logging.debug("Creating encoding..")
         return tf.constant([arr])
 
     def encode_continuous_value(self, value):
         """Encode continuous value"""
 
-        logging.info("Creating continuous value..")
+        logging.debug("Creating continuous value..")
         # resize value to input_dim
         value = value + [0.0] * (self.input_dim - len(value))
         value = tf.cast(value, dtype=tf.float32)
@@ -81,7 +81,7 @@ class DataLoader:
 
     def encode_discrete_value(self, value: int):
         """Encode discrete value"""
-        logging.info("Creating discrete value..")
+        logging.debug("Creating discrete value..")
         arr = [0.0] * self.input_dim
         arr[0] = value
         logging.debug("  arr: %s", arr)
@@ -90,7 +90,7 @@ class DataLoader:
     def encode_row_pos(self):
         """Create row_pos tensor"""
 
-        logging.info("Creating row_pos..")
+        logging.debug("Creating row_pos..")
         # row_pos from
         arr1 = [i / self.y_scale for i in range(self.y_scale)]
         arr1 *= self.x_scale
@@ -114,7 +114,7 @@ class DataLoader:
 
     def encode_col_pos(self):
         """Create col_pos tensor"""
-        logging.info("Creating col_pos..")
+        logging.debug("Creating col_pos..")
         arr1 = []
         arr2 = []
 
@@ -143,7 +143,7 @@ class DataLoader:
     def encode_obs(self, mask_image=False, mask_continuous=False, mask_discrete=False):
         """Create obs tensor"""
 
-        logging.info("Creating obs..")
+        logging.debug("Creating obs..")
         # obs token
         arr1 = [i for i in range(self.num_patches + 2)]
         arr1 = arr1 * self.num_observations
@@ -186,12 +186,13 @@ class DataLoader:
 
                 image = self.image_to_patches(img_file)
                 continuous_value = self.encode_continuous_value(key["jointAngles"])
+                discrete_value = self.encode_discrete_value(key["action"])
+
                 # Check if its last step
                 if key == episode_config["steps"][-1]:
-                    discrete_value = self.encode_discrete_value(0)  # Alignment achieved
-                    discrete_array.append(key["action"])  # Take only last action
+                    discrete_array.append(0)  # 0 since alignment achieved
                 else:
-                    discrete_value = self.encode_discrete_value(key["action"])
+                    discrete_array.append(key["action"])
 
                 input_array.append(image)
                 input_array.append(continuous_value)
@@ -203,11 +204,19 @@ class DataLoader:
                 axis=1,
             )
 
-            logging.info("input_ids shape: %s", input_ids.shape)
+            # logging.info("input_ids shape: %s", input_ids.shape)
             # tf.print(input_ids[0])
             return input_ids, discrete_array
 
-    def load(self, mask_image=False, mask_continuous=False, mask_discrete=False):
+    def re_encode(self, input, row_len, col_dups):
+        """Re-encode input to sliding window"""
+        encoding = input[:row_len, :]
+        columns = tf.tile(encoding[:, tf.newaxis, :], multiples=[1, col_dups, 1])
+        return tf.reshape(columns, (row_len, -1))
+
+    def load(
+        self, mask_image=False, mask_continuous=False, mask_discrete=False, sliding_batch_size=4
+    ):
         """Load data from JSON files"""
 
         try:
@@ -246,10 +255,13 @@ class DataLoader:
             input_ids, discrete_array = self.process_episode(episode_config_file, prefix=prefix)
             logging.debug("input_ids shape: %s", input_ids.shape)
 
+            # print (">> discrete_array: ", discrete_array)
+
             # Convert discrete_array to tensor
             discrete_array = tf.constant([discrete_array], dtype=tf.int32)
             # one hot encoding
             discrete_array = tf.one_hot(discrete_array, depth=3, dtype=tf.int32)
+            # tf.print("discrete_array: ", discrete_array)
 
             # Append to all_ods
             if all_ids is None:
@@ -313,4 +325,43 @@ class DataLoader:
         logging.info("all_col_pos shape: %s, %s", all_col_pos[0].shape, all_col_pos[1].shape)
         logging.info("all_obs shape: %s, %s", all_obs[0].shape, all_obs[1].shape)
 
-        return (all_ids, all_encoding, all_row_pos, all_col_pos, all_obs, all_discrete)
+        print("====================================")
+
+        num_batches = all_ids.shape[0]
+        multiplier = sliding_batch_size * num_batches
+
+        # There are 132 tokens for 6 observations, each observation has 22 tokens
+        input_ids = all_ids[:, :66, :]
+        input_ids = tf.concat([input_ids, all_ids[:, 22:88, :]], axis=0)
+        input_ids = tf.concat([input_ids, all_ids[:, 44:110, :]], axis=0)
+        input_ids = tf.concat([input_ids, all_ids[:, 66:, :]], axis=0)
+
+        # Discrete values advaced by 3 steps
+        discrete = tf.gather(all_discrete, [2, 3, 4, 5], axis=1)
+        discrete = tf.reshape(discrete, (multiplier, 1, 3))
+
+        encoding = self.re_encode(all_encoding, multiplier, 2)
+
+        row_pos = (
+            self.re_encode(all_row_pos[0], multiplier, 2),
+            self.re_encode(all_row_pos[1], multiplier, 2),
+        )
+
+        col_pos = (
+            self.re_encode(all_col_pos[0], multiplier, 2),
+            self.re_encode(all_col_pos[1], multiplier, 2),
+        )
+
+        obs = (
+            self.re_encode(all_obs[0], multiplier, 2),
+            self.re_encode(all_obs[1], multiplier, 2),
+        )
+
+        logging.info(" input_ids shape: %s", input_ids.shape)
+        logging.info(" discrete shape: %s", discrete.shape)
+        logging.info(" encoding shape: %s", encoding.shape)
+        logging.info(" row_pos shape: %s, %s", row_pos[0].shape, row_pos[1].shape)
+        logging.info(" col_pos shape: %s, %s", col_pos[0].shape, col_pos[1].shape)
+        logging.info(" obs shape: %s, %s", obs[0].shape, obs[1].shape)
+
+        return (input_ids, encoding, row_pos, col_pos, obs, discrete)

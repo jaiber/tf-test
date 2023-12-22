@@ -32,12 +32,16 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--epochs", type=int, default=10)
     parser.add_argument("--batch_size", type=int, default=6)
+    parser.add_argument("--sliding_batch_size", type=int, default=4)
     args = parser.parse_args()
 
-    print("Loading data")  # Hardcoded for now
+    logging.info("Loading data")  # Hardcoded for now
     file = "experiments/Cuboid100Episodes/MasterJsonForEpisodes2023-12-08_22-24-37-645.json"
     data = DataLoader(file)
-    (input_tokens, sequence_encoding, row_pos, col_pos, obs_encoding, all_discrete) = data.load()
+
+    (input_tokens, sequence_encoding, row_pos, col_pos, obs_encoding, all_discrete) = data.load(
+        sliding_batch_size=args.sliding_batch_size, mask_discrete=True
+    )
 
     config = GatoConfig.small()
     gato_model = Gato(config, trainable=True, name="Gato")
@@ -60,21 +64,24 @@ if __name__ == "__main__":
     # y_train = np.random.randint(3, size=(input_tokens.shape[0], 1, 3))
 
     y_train = all_discrete
-    print("y_train shape: ", y_train.shape)
+    logging.info("y_train shape: ", y_train.shape)
     # tf.print(y_train.numpy())
 
-    print("Compiling model ================")
+    logging.info("Compiling model ================")
+    # gato_model.compile(
+    #     optimizer=tf.keras.optimizers.Adam(), loss=loss_function, metrics=["accuracy"]
+    # )
     gato_model.compile(
-        optimizer=tf.keras.optimizers.Adam(), loss=loss_function, metrics=["accuracy"]
+        optimizer=tf.keras.optimizers.AdamW(), loss="categorical_crossentropy", metrics=["accuracy"]
     )
-    # gato_model.compile(optimizer=tf.keras.optimizers.Adam(), loss="categorical_crossentropy", metrics=['accuracy'])
 
-    gato_model(x_train)
+    # gato_model(x_train)
+
+    logging.info("Training the model ================")
+    gato_model.fit(
+        x_train, y_train, epochs=args.epochs, batch_size=args.batch_size, verbose=2, shuffle=True
+    )
     print("model summary: ", gato_model.summary(expand_nested=False))
-
-    print("Training the model ================")
-    gato_model.fit(x_train, y_train, epochs=args.epochs, batch_size=args.batch_size, verbose=2)
-
     # print("Running model.evaluate =================")
     # gato_model.evaluate(x_train, y_train, verbose=2)
 

@@ -66,9 +66,9 @@ class Gato(models.Model):
         obs_mask = tf.cast(tf.squeeze(obs_mask, axis=0), tf.int32)
         """
 
-        print("    input_ids shape: ", input_ids.shape)
-        print("    encoding shape: ", encoding.shape)
-        print("    row_pos shape: ", row_pos[0].shape)
+        # print("    input_ids shape: ", input_ids.shape)
+        # print("    encoding shape: ", encoding.shape)
+        # print("    row_pos shape: ", row_pos[0].shape)
         # print ("    col_pos shape: ", col_pos[0].shape)
         # print ("    obs_pos shape: ", obs_pos.shape)
         # print ("    obs_mask shape: ", obs_mask.shape)
@@ -82,7 +82,6 @@ class Gato(models.Model):
             (input_ids.shape[0], input_ids.shape[0], self.config.layer_width), dtype=tf.float32
         )
         image_embed = self.image_embedding((input_ids, (row_pos, col_pos)), training=training)
-        print("multiplying: ", encoding[..., 0].transpose().shape, ones.shape)
         image_embed *= encoding[..., 0].transpose().matmul(ones)  # image patch masking
 
         # continuous value takes from first value of input_ids
