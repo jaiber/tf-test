@@ -167,7 +167,8 @@ class DataLoader:
 
         input_ids = None
         input_array = []
-        discrete_array = tf.Variable(tf.constant([], shape=(0, 1), dtype=tf.int32))
+        # discrete_array = tf.Variable(tf.constant([], shape=(0, 1), dtype=tf.int32))
+        discrete_array = []
 
         logging.debug("Loading episode_config: %s", episode_config_file)
         # Load episode config
@@ -188,14 +189,13 @@ class DataLoader:
                 # Check if its last step
                 if key == episode_config["steps"][-1]:
                     discrete_value = self.encode_discrete_value(0)  # Alignment achieved
+                    discrete_array.append(key["action"])  # Take only last action
                 else:
                     discrete_value = self.encode_discrete_value(key["action"])
 
                 input_array.append(image)
                 input_array.append(continuous_value)
                 input_array.append(discrete_value)
-                action = tf.constant([[key["action"]]], dtype=tf.int32)
-                discrete_array = tf.concat([discrete_array, action], axis=0)
 
             logging.debug("input_array size: %s", len(input_array))
             input_ids = tf.concat(
@@ -245,13 +245,19 @@ class DataLoader:
 
             input_ids, discrete_array = self.process_episode(episode_config_file, prefix=prefix)
             logging.debug("input_ids shape: %s", input_ids.shape)
+
+            # Convert discrete_array to tensor
+            discrete_array = tf.constant([discrete_array], dtype=tf.int32)
+            # one hot encoding
+            discrete_array = tf.one_hot(discrete_array, depth=3, dtype=tf.int32)
+
             # Append to all_ods
             if all_ids is None:
                 all_ids = input_ids
                 all_discrete = discrete_array
             else:
                 all_ids = tf.concat([all_ids, input_ids], axis=axis)
-                all_discrete = tf.concat([all_discrete, discrete_array], axis=1)
+                all_discrete = tf.concat([all_discrete, discrete_array], axis=axis)
 
             encoding = self.create_encoding()
             logging.debug(" encoding shape: %s", encoding)

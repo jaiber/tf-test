@@ -104,8 +104,11 @@ class Gato(models.Model):
         output = self.dense(output)
         # argmax
         # output = tf.argmax(output, axis=-1)
-        print("output shape: ", output.shape)
-        tf.print(output)
+        # print("output shape: ", output.shape)
+        # Match the size of y_train
+        output = tf.expand_dims(output, axis=1)
+        # print("output shape: ", output.shape)
+        # tf.print(output)
         return output
 
     def train_transformer(
