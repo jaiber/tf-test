@@ -1,3 +1,4 @@
+import sys
 import tensorflow as tf
 
 from gato.models.transformer import TransformerBlock
@@ -47,6 +48,8 @@ class Gato(models.Model):
         # row_pos and col_pos with tuple of (pos_from, pos_to)
         # obs_pos and obs_mask with (B, L) or (B,)
         input_ids, (encoding, row_pos, col_pos), (obs_pos, obs_mask) = inputs
+
+        """
         # Strip batch dinmension
         
         input_ids = tf.squeeze(input_ids, axis=0)
@@ -61,22 +64,25 @@ class Gato(models.Model):
         )
         obs_pos = tf.cast(tf.squeeze(obs_pos, axis=0), tf.int32)
         obs_mask = tf.cast(tf.squeeze(obs_mask, axis=0), tf.int32)
-        
-        # print ("    input_ids shape: ", input_ids.shape)
-        # print ("    encoding shape: ", encoding.shape)
-        # print ("    row_pos shape: ", row_pos[0].shape)
+        """
+
+        print("    input_ids shape: ", input_ids.shape)
+        print("    encoding shape: ", encoding.shape)
+        print("    row_pos shape: ", row_pos[0].shape)
         # print ("    col_pos shape: ", col_pos[0].shape)
         # print ("    obs_pos shape: ", obs_pos.shape)
         # print ("    obs_mask shape: ", obs_mask.shape)
-
         # Encoding flags for embed masks
         # 0 - image
         # 1 - continuous
         # 2 - discrete (actions, texts)
         encoding = tf.one_hot(encoding, depth=3, dtype=tf.float32)
 
-        ones = tf.ones((input_ids.shape[0], 1, self.config.layer_width), dtype=tf.float32)
+        ones = tf.ones(
+            (input_ids.shape[0], input_ids.shape[0], self.config.layer_width), dtype=tf.float32
+        )
         image_embed = self.image_embedding((input_ids, (row_pos, col_pos)), training=training)
+        print("multiplying: ", encoding[..., 0].transpose().shape, ones.shape)
         image_embed *= encoding[..., 0].transpose().matmul(ones)  # image patch masking
 
         # continuous value takes from first value of input_ids
@@ -101,7 +107,7 @@ class Gato(models.Model):
         print("output shape: ", output.shape)
         tf.print(output)
         return output
-    
+
     def train_transformer(
         self,
         x_train,

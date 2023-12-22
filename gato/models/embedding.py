@@ -12,15 +12,14 @@ def _randomized_positions(from_v, to_v):
 
 
 def _rounded_mean_positions(from_v, to_v):
-    pos = (from_v + to_v).cast(tf.float32) / 2.
+    pos = (from_v + to_v).cast(tf.float32) / 2.0
     return pos.round()
 
 
 class PatchPositionEncoding(layers.Layer):
-
-    def __init__(self,
-                 config: Union[GatoConfig, Dict[str, Any]],
-                 trainable=True, name=None, *args, **kwargs):
+    def __init__(
+        self, config: Union[GatoConfig, Dict[str, Any]], trainable=True, name=None, *args, **kwargs
+    ):
         """
         Appendix C.3. Position Encodings
         """
@@ -34,8 +33,12 @@ class PatchPositionEncoding(layers.Layer):
         self.discretize_depth = self.config.discretize_depth
         self.patch_size = self.config.img_patch_size
 
-        self.row_embedding = layers.Embedding(self.discretize_depth, self.embedding_dim, name='row_embedding')
-        self.col_embedding = layers.Embedding(self.discretize_depth, self.embedding_dim, name='col_embedding')
+        self.row_embedding = layers.Embedding(
+            self.discretize_depth, self.embedding_dim, name="row_embedding"
+        )
+        self.col_embedding = layers.Embedding(
+            self.discretize_depth, self.embedding_dim, name="col_embedding"
+        )
 
     def _discretize(self, pos):
         return (pos * self.discretize_depth).round()
@@ -46,7 +49,7 @@ class PatchPositionEncoding(layers.Layer):
 
     def call(self, inputs, *args, **kwargs):
         # Appendix C.3. Position Encodings; Figure 15 | Patch position encodings.
-        training = kwargs['training'] if 'training' in kwargs else False
+        training = kwargs["training"] if "training" in kwargs else False
         # input_ids must already be embedded by the resnet embedding function.
         # row_pos and col_pos must be intervals which is tuple of (pos_from, pos_to)
         # row_pos and col_pos must be normalized between [0, 1] to show their relativity.
@@ -66,18 +69,23 @@ class PatchPositionEncoding(layers.Layer):
 
         # > Once row and column position encoding are retrieved from the embedding table,
         # > they are added onto the token embedding produced by the resnet embedding function.
-        return input_ids + self.row_embedding(row_pos.cast(tf.int32)) + self.col_embedding(col_pos.cast(tf.int32))
+        return (
+            input_ids
+            + self.row_embedding(row_pos.cast(tf.int32))
+            + self.col_embedding(col_pos.cast(tf.int32))
+        )
 
     def get_config(self):
         config = super(PatchPositionEncoding, self).get_config()
-        config.update({
-            'config': self.config.to_dict(),
-        })
+        config.update(
+            {
+                "config": self.config.to_dict(),
+            }
+        )
         return config
 
 
 class ResidualUnit(layers.Layer):
-
     def __init__(self, num_groups: int, filters: int, trainable=True, name=None, *args, **kwargs):
         super(ResidualUnit, self).__init__(trainable=trainable, name=name, *args, **kwargs)
         self.num_groups = num_groups
@@ -87,15 +95,33 @@ class ResidualUnit(layers.Layer):
         self.conv_proj = self.gn_proj = None
 
     def build(self, input_shape):
-        self.gn1 = layers.GroupNormalization(groups=self.num_groups, name='gn1')
-        self.gn2 = layers.GroupNormalization(groups=self.num_groups, name='gn2')
-        self.conv1 = layers.Conv2D(filters=self.filters // 2, kernel_size=(3, 3), strides=(1, 1),
-                                   use_bias=False, padding='same', name='conv1')
-        self.conv2 = layers.Conv2D(filters=self.filters, kernel_size=(3, 3), strides=(2, 2),
-                                   use_bias=False, padding='same', name='conv2')
-        self.conv_proj = layers.Conv2D(filters=self.filters, kernel_size=(1, 1), strides=(2, 2),
-                                       use_bias=False, padding='same', name='conv_proj')
-        self.gn_proj = layers.GroupNormalization(groups=self.num_groups, name='gn_proj')
+        self.gn1 = layers.GroupNormalization(groups=self.num_groups, name="gn1")
+        self.gn2 = layers.GroupNormalization(groups=self.num_groups, name="gn2")
+        self.conv1 = layers.Conv2D(
+            filters=self.filters // 2,
+            kernel_size=(3, 3),
+            strides=(1, 1),
+            use_bias=False,
+            padding="same",
+            name="conv1",
+        )
+        self.conv2 = layers.Conv2D(
+            filters=self.filters,
+            kernel_size=(3, 3),
+            strides=(2, 2),
+            use_bias=False,
+            padding="same",
+            name="conv2",
+        )
+        self.conv_proj = layers.Conv2D(
+            filters=self.filters,
+            kernel_size=(1, 1),
+            strides=(2, 2),
+            use_bias=False,
+            padding="same",
+            name="conv_proj",
+        )
+        self.gn_proj = layers.GroupNormalization(groups=self.num_groups, name="gn_proj")
 
     def call(self, inputs, *args, **kwargs):
         # Supplementary Material B. Agent Data Tokenization Details; Figure 16
@@ -115,8 +141,9 @@ class ResidualUnit(layers.Layer):
 
 
 class ResidualEmbedding(layers.Layer):
-
-    def __init__(self, config: Union[GatoConfig, Dict[str, Any]], trainable=True, name=None, *args, **kwargs):
+    def __init__(
+        self, config: Union[GatoConfig, Dict[str, Any]], trainable=True, name=None, *args, **kwargs
+    ):
         """
         Appendix C.2. Embedding Function
         """
@@ -131,22 +158,36 @@ class ResidualEmbedding(layers.Layer):
 
     def build(self, input_shape):
         if self.config.input_dim != self.config.layer_width:
-            self.conv_proj = layers.Conv2D(filters=self.config.layer_width,
-                                           kernel_size=(1, 1),
-                                           strides=(1, 1),
-                                           padding='same',
-                                           use_bias=False,
-                                           name='conv_proj')
-        self.root_conv = models.Sequential([
-            layers.Conv2D(filters=96, kernel_size=(7, 7), strides=(2, 2),
-                          use_bias=False, padding='same', name='conv_root'),
-            layers.GroupNormalization(groups=self.config.num_group_norm_groups, name='gn_root'),
-            layers.Activation('gelu', name='act_root')
-        ])
-        self.residual_units = [ResidualUnit(num_groups=self.config.num_group_norm_groups,
-                                            filters=96 * 2 ** (i + 1),
-                                            name='residual_unit_{}'.format(i + 1))
-                               for i in range(3)]
+            self.conv_proj = layers.Conv2D(
+                filters=self.config.layer_width,
+                kernel_size=(1, 1),
+                strides=(1, 1),
+                padding="same",
+                use_bias=False,
+                name="conv_proj",
+            )
+        self.root_conv = models.Sequential(
+            [
+                layers.Conv2D(
+                    filters=96,
+                    kernel_size=(7, 7),
+                    strides=(2, 2),
+                    use_bias=False,
+                    padding="same",
+                    name="conv_root",
+                ),
+                layers.GroupNormalization(groups=self.config.num_group_norm_groups, name="gn_root"),
+                layers.Activation("gelu", name="act_root"),
+            ]
+        )
+        self.residual_units = [
+            ResidualUnit(
+                num_groups=self.config.num_group_norm_groups,
+                filters=96 * 2 ** (i + 1),
+                name="residual_unit_{}".format(i + 1),
+            )
+            for i in range(3)
+        ]
 
     def call(self, inputs, *args, **kwargs):
         # Section 2.1 Tokenization.
@@ -168,15 +209,14 @@ class ResidualEmbedding(layers.Layer):
 
     def get_config(self):
         config = super(ResidualEmbedding, self).get_config()
-        config.update({
-            'config': self.config.to_dict()
-        })
+        config.update({"config": self.config.to_dict()})
         return config
 
 
 class LocalPositionEncoding(layers.Layer):
-
-    def __init__(self, config: Union[GatoConfig, Dict[str, Any]], trainable=True, name=None, *args, **kwargs):
+    def __init__(
+        self, config: Union[GatoConfig, Dict[str, Any]], trainable=True, name=None, *args, **kwargs
+    ):
         """
         Appendix C.3. Position Encodings > Local Observation Position Encodings
         """
@@ -188,7 +228,9 @@ class LocalPositionEncoding(layers.Layer):
         self.embedding = None
 
     def build(self, input_shape):
-        self.embedding = layers.Embedding(self.config.token_sequence_length, self.config.layer_width)
+        self.embedding = layers.Embedding(
+            self.config.token_sequence_length, self.config.layer_width
+        )
         self.built = True
 
     def call(self, inputs, *args, **kwargs):
@@ -199,21 +241,20 @@ class LocalPositionEncoding(layers.Layer):
         obs_pos, obs_mask = inputs
         embed = self.embedding(obs_pos)
 
-        ones = tf.ones((embed.shape[0], 1, self.config.layer_width), dtype=tf.float32)
+        ones = tf.ones((embed.shape[0], embed.shape[0], self.config.layer_width), dtype=tf.float32)
         obs_mask = obs_mask.cast(tf.float32).transpose().matmul(ones)
         return embed * obs_mask
 
     def get_config(self):
         config = super(LocalPositionEncoding, self).get_config()
-        config.update({
-            'config': self.config.to_dict()
-        })
+        config.update({"config": self.config.to_dict()})
         return config
 
 
 class DiscreteEmbedding(layers.Layer):
-
-    def __init__(self, config: Union[GatoConfig, Dict[str, Any]], trainable=True, name=None, *args, **kwargs):
+    def __init__(
+        self, config: Union[GatoConfig, Dict[str, Any]], trainable=True, name=None, *args, **kwargs
+    ):
         super(DiscreteEmbedding, self).__init__(trainable=trainable, name=name, *args, **kwargs)
 
         if isinstance(config, dict):
@@ -225,10 +266,10 @@ class DiscreteEmbedding(layers.Layer):
     def build(self, input_shape):
         # Appendix C.1. Transformer Hyperparameters
         # Shared Embedding
-        with tf.name_scope('discrete_shared_embedding'):
-            self.embedding = layers.Embedding(self.config.embedding_input_size,
-                                              self.config.layer_width,
-                                              name='discrete_embedding')
+        with tf.name_scope("discrete_shared_embedding"):
+            self.embedding = layers.Embedding(
+                self.config.embedding_input_size, self.config.layer_width, name="discrete_embedding"
+            )
         self.built = True
 
     def call(self, inputs, *args, **kwargs):
@@ -236,7 +277,5 @@ class DiscreteEmbedding(layers.Layer):
 
     def get_config(self):
         config = super(DiscreteEmbedding, self).get_config()
-        config.update({
-            'config': self.config.to_dict()
-        })
+        config.update({"config": self.config.to_dict()})
         return config

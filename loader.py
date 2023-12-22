@@ -153,7 +153,7 @@ class DataLoader:
         cmask = [0] if mask_continuous else [1]
         dmask = [0] if mask_discrete else [1]
 
-        arr2 = imask * (self.num_patches) + cmask + dmask # Don't mask discrete tokens
+        arr2 = imask * (self.num_patches) + cmask + dmask  # Don't mask discrete tokens
         arr2 = arr2 * self.num_observations
         logging.debug("arr2: %s", arr2)
 
@@ -167,7 +167,7 @@ class DataLoader:
 
         input_ids = None
         input_array = []
-        discrete_array = tf.Variable(tf.constant([], shape=(0,1), dtype=tf.int32))
+        discrete_array = tf.Variable(tf.constant([], shape=(0, 1), dtype=tf.int32))
 
         logging.debug("Loading episode_config: %s", episode_config_file)
         # Load episode config
@@ -202,11 +202,10 @@ class DataLoader:
                 input_array,  # repeat num_observations times
                 axis=1,
             )
-            
+
             logging.info("input_ids shape: %s", input_ids.shape)
             # tf.print(input_ids[0])
             return input_ids, discrete_array
-
 
     def load(self, mask_image=False, mask_continuous=False, mask_discrete=False):
         """Load data from JSON files"""
@@ -236,6 +235,7 @@ class DataLoader:
         all_col_pos = None
         all_obs = None
         all_discrete = None
+        axis = 0
 
         # Loop through each episode config file
         # for episode_config_file in self.config["episodes"]:
@@ -250,7 +250,7 @@ class DataLoader:
                 all_ids = input_ids
                 all_discrete = discrete_array
             else:
-                all_ids = tf.concat([all_ids, input_ids], axis=1)
+                all_ids = tf.concat([all_ids, input_ids], axis=axis)
                 all_discrete = tf.concat([all_discrete, discrete_array], axis=1)
 
             encoding = self.create_encoding()
@@ -259,7 +259,7 @@ class DataLoader:
             if all_encoding is None:
                 all_encoding = encoding
             else:
-                all_encoding = tf.concat([all_encoding, encoding], axis=1)
+                all_encoding = tf.concat([all_encoding, encoding], axis=axis)
             logging.debug("  encoding shape: %s", encoding.shape)
 
             row_pos = self.encode_row_pos()
@@ -268,8 +268,8 @@ class DataLoader:
                 all_row_pos = row_pos
             else:
                 all_row_pos = (
-                    tf.concat([all_row_pos[0], row_pos[0]], axis=1),
-                    tf.concat([all_row_pos[1], row_pos[1]], axis=1),
+                    tf.concat([all_row_pos[0], row_pos[0]], axis=axis),
+                    tf.concat([all_row_pos[1], row_pos[1]], axis=axis),
                 )
             logging.debug("  row_pos shape: %s, %s", row_pos[0].shape, row_pos[1].shape)
 
@@ -279,8 +279,8 @@ class DataLoader:
                 all_col_pos = col_pos
             else:
                 all_col_pos = (
-                    tf.concat([all_col_pos[0], col_pos[0]], axis=1),
-                    tf.concat([all_col_pos[1], col_pos[1]], axis=1),
+                    tf.concat([all_col_pos[0], col_pos[0]], axis=axis),
+                    tf.concat([all_col_pos[1], col_pos[1]], axis=axis),
                 )
             logging.debug("  col_pos shape: %s, %s", col_pos[0].shape, col_pos[1].shape)
 
@@ -294,8 +294,8 @@ class DataLoader:
                 all_obs = obs
             else:
                 all_obs = (
-                    tf.concat([all_obs[0], obs[0]], axis=1),
-                    tf.concat([all_obs[1], obs[1]], axis=1),
+                    tf.concat([all_obs[0], obs[0]], axis=axis),
+                    tf.concat([all_obs[1], obs[1]], axis=axis),
                 )
             logging.debug("  obs shape: %s, %s", obs[0].shape, obs[1].shape)
 
@@ -303,12 +303,8 @@ class DataLoader:
         logging.info("all_ids shape: %s", all_ids.shape)
         logging.info("all_discrete shape: %s", all_discrete.shape)
         logging.info("all_encoding shape: %s", all_encoding.shape)
-        logging.info(
-            "all_row_pos shape: %s, %s", all_row_pos[0].shape, all_row_pos[1].shape
-        )
-        logging.info(
-            "all_col_pos shape: %s, %s", all_col_pos[0].shape, all_col_pos[1].shape
-        )
+        logging.info("all_row_pos shape: %s, %s", all_row_pos[0].shape, all_row_pos[1].shape)
+        logging.info("all_col_pos shape: %s, %s", all_col_pos[0].shape, all_col_pos[1].shape)
         logging.info("all_obs shape: %s, %s", all_obs[0].shape, all_obs[1].shape)
 
         return (all_ids, all_encoding, all_row_pos, all_col_pos, all_obs, all_discrete)

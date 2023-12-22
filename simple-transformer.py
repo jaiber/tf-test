@@ -37,11 +37,24 @@ if __name__ == "__main__":
     data = DataLoader(file)
     (input_tokens, sequence_encoding, row_pos, col_pos, obs_encoding, all_discrete) = data.load()
 
-    #sys.exit(0)
     config = GatoConfig.small()
     gato_model = Gato(config, trainable=True, name="Gato")
 
+    # Convert to tensors of type int32
+    row_pos = (  # Contains rows_from and rows_to
+        tf.cast(row_pos[0], tf.int32),
+        tf.cast(row_pos[1], tf.int32),
+    )
+    col_pos = (  # Contains cols_from and cols_to
+        tf.cast(col_pos[0], tf.int32),
+        tf.cast(col_pos[1], tf.int32),
+    )
+    obs_encoding = (  # Contains observation encoding and mask
+        tf.cast(obs_encoding[0], tf.int32),
+        tf.cast(obs_encoding[1], tf.int32),
+    )
 
+    """
     # Adding batch dimension
     input_tokens = tf.expand_dims(
         input_tokens, axis=0
@@ -59,11 +72,11 @@ if __name__ == "__main__":
         tf.expand_dims(tf.cast(obs_encoding[0], tf.int32), axis=0),
         tf.expand_dims(tf.cast(obs_encoding[1], tf.int32), axis=0),
     )
+    """
 
-
-    x_train = (input_tokens, (sequence_encoding, row_pos, col_pos), obs_encoding)
+    x_train = [input_tokens, (sequence_encoding, row_pos, col_pos), obs_encoding]
     #y_train = np.random.random((1, 132, 3)).astype(np.float32)
-    y_train = np.random.randint(3, size=(1, 1, 3))
+    y_train = np.random.randint(3, size=(input_tokens.shape[0], 1, 3))
     print ("y_train shape: ", y_train.shape)
     
     #y_train = all_discrete
@@ -91,8 +104,8 @@ if __name__ == "__main__":
     print("Training the model ================")
     gato_model.fit(x_train, y_train, epochs=args.epochs, batch_size=args.batch_size, verbose=2)
 
-    print("Running model.evaluate =================")
-    gato_model.evaluate(x_train, y_train, verbose=2)
+    #print("Running model.evaluate =================")
+    #gato_model.evaluate(x_train, y_train, verbose=2)
 
     # print("Running model.predict")
     # input = np.random.random((1, 132, 768)).astype(np.float32)
