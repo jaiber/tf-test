@@ -1,4 +1,5 @@
 import sys
+import numpy as np
 import tensorflow as tf
 
 from gato.models.transformer import TransformerBlock
@@ -40,7 +41,8 @@ class Gato(models.Model):
         )
 
         self.flatten = layers.Flatten()
-        self.dense = layers.Dense(3, activation="softmax", name="Output")
+        self.dense = layers.Dense(3, activation="linear", name="Output")
+        self.softmax = layers.Softmax()
 
     def call(self, inputs, training=None, mask=None):
         # input_ids with (B, L, 768)
@@ -79,7 +81,8 @@ class Gato(models.Model):
         encoding = tf.one_hot(encoding, depth=3, dtype=tf.float32)
 
         ones = tf.ones(
-            (input_ids.shape[0], input_ids.shape[0], self.config.layer_width), dtype=tf.float32
+            (input_ids.shape[0], input_ids.shape[0], self.config.layer_width),
+            dtype=tf.float32,
         )
         image_embed = self.image_embedding((input_ids, (row_pos, col_pos)), training=training)
         image_embed *= encoding[..., 0].transpose().matmul(ones)  # image patch masking
@@ -101,13 +104,9 @@ class Gato(models.Model):
         output = self.flatten(hidden_states)
         # Add dense softmax layer
         output = self.dense(output)
-        # argmax
-        # output = tf.argmax(output, axis=-1)
-        # print("output shape: ", output.shape)
-        # Match the size of y_train
+        output = self.softmax(output)
+        # tf.print(">> output: ", output)
         output = tf.expand_dims(output, axis=1)
-        # print("output shape: ", output.shape)
-        # tf.print(output)
         return output
 
     def train_transformer(
@@ -143,7 +142,9 @@ class Transformer(models.Model):
         self.config = config
         self.encoders = [
             TransformerBlock(
-                config=self.config, trainable=trainable, name="EncoderBlock{}".format(idx)
+                config=self.config,
+                trainable=trainable,
+                name="EncoderBlock{}".format(idx),
             )
             for idx in range(self.config.num_transformer_blocks)
         ]

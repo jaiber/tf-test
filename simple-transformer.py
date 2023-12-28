@@ -8,21 +8,39 @@ from gato import Gato
 import tensorflow as tf
 from config import GatoConfig
 from loader import DataLoader
+from tensorflow.keras import losses
+
+cce = losses.CategoricalCrossentropy(from_logits=True, axis=0)
+sce = losses.SparseCategoricalCrossentropy(from_logits=True)
 
 
 def loss_function(y_true, y_pred):
-    print("y_true shape: ", y_true.shape)
-    tf.print("y_true: ", y_true)
+    global cce
+    global sce
+
+    y_pred = tf.squeeze(y_pred, axis=0)
+    y_true = tf.squeeze(y_true, axis=0)
+
+    y_pred = tf.squeeze(y_pred, axis=0)
+    y_true = tf.squeeze(y_true, axis=0)
+
+    # print("y_true shape: ", y_true.shape)
+    # tf.print("y_true: ", y_true)
 
     print("y_pred shape: ", y_pred.shape)
     tf.print("y_pred: ", y_pred)
 
-    print("[dice_loss] y_pred=", y_pred, "y_true=", y_true)
-    y_true = tf.cast(y_true, tf.float32)
-    numerator = 2 * tf.reduce_sum(y_true * y_pred)
-    denominator = tf.reduce_sum(y_true + y_pred)
+    y_label = tf.argmax(y_true, axis=0)
+    print("y_label shape: ", y_label.shape)
+    tf.print("y_label: ", y_label)
 
-    return 1 - numerator / denominator
+    losses = sce(y_label, y_pred)
+
+    # losses = cce(y_true, y_pred)
+    print("losses shape: ", losses.shape)
+    tf.print("losses: ", losses)
+
+    return losses
 
 
 if __name__ == "__main__":
@@ -33,15 +51,25 @@ if __name__ == "__main__":
     parser.add_argument("--epochs", type=int, default=10)
     parser.add_argument("--batch_size", type=int, default=6)
     parser.add_argument("--sliding_batch_size", type=int, default=4)
+    parser.add_argument(
+        "--exp_config",
+        type=str,
+        default="experiments/Cuboid100Episodes/MasterJsonForEpisodes2023-12-08_22-24-37-645.json",
+    )
     args = parser.parse_args()
 
     logging.info("Loading data")  # Hardcoded for now
-    file = "experiments/Cuboid100Episodes/MasterJsonForEpisodes2023-12-08_22-24-37-645.json"
-    data = DataLoader(file)
+    # file = "experiments/Cuboid100Episodes/MasterJsonForEpisodes2023-12-08_22-24-37-645.json"
+    data = DataLoader(args.exp_config)
 
-    (input_tokens, sequence_encoding, row_pos, col_pos, obs_encoding, all_discrete) = data.load(
-        sliding_batch_size=args.sliding_batch_size, mask_discrete=True
-    )
+    (
+        input_tokens,
+        sequence_encoding,
+        row_pos,
+        col_pos,
+        obs_encoding,
+        all_discrete,
+    ) = data.load(sliding_batch_size=args.sliding_batch_size, mask_discrete=False)
 
     config = GatoConfig.small()
     gato_model = Gato(config, trainable=True, name="Gato")
@@ -64,22 +92,27 @@ if __name__ == "__main__":
     # y_train = np.random.randint(3, size=(input_tokens.shape[0], 1, 3))
 
     y_train = all_discrete
-    logging.info("y_train shape: ", y_train.shape)
+    logging.info("y_train shape: %s", y_train.shape)
     # tf.print(y_train.numpy())
 
     logging.info("Compiling model ================")
-    # gato_model.compile(
-    #     optimizer=tf.keras.optimizers.Adam(), loss=loss_function, metrics=["accuracy"]
-    # )
     gato_model.compile(
-        optimizer=tf.keras.optimizers.AdamW(), loss="categorical_crossentropy", metrics=["accuracy"]
+        optimizer=tf.keras.optimizers.AdamW(), loss=loss_function, metrics=["accuracy"]
     )
+    # gato_model.compile(
+    #    optimizer=tf.keras.optimizers.AdamW(), loss="sparse_categorical_crossentropy", metrics=["accuracy"]
+    # )
 
     # gato_model(x_train)
 
     logging.info("Training the model ================")
     gato_model.fit(
-        x_train, y_train, epochs=args.epochs, batch_size=args.batch_size, verbose=2, shuffle=True
+        x_train,
+        y_train,
+        epochs=args.epochs,
+        batch_size=args.batch_size,
+        verbose=2,
+        shuffle=True,
     )
     print("model summary: ", gato_model.summary(expand_nested=False))
     # print("Running model.evaluate =================")

@@ -165,9 +165,9 @@ class DataLoader:
     def process_episode(self, episode_config_file, prefix):
         """Process episode config file and create input_ids tensor"""
 
-        input_ids = None
-        input_array = []
-        # discrete_array = tf.Variable(tf.constant([], shape=(0, 1), dtype=tf.int32))
+        input_ids = (
+            None  # tf.Variable(tf.constant([], shape=(0, 1, self.input_dim), dtype=tf.float32))
+        )
         discrete_array = []
 
         logging.debug("Loading episode_config: %s", episode_config_file)
@@ -194,16 +194,30 @@ class DataLoader:
                 else:
                     discrete_array.append(key["action"])
 
-                input_array.append(image)
-                input_array.append(continuous_value)
-                input_array.append(discrete_value)
+                # convert to tensor
+                image = tf.constant(image, dtype=tf.float32)
+                continuous_value = tf.constant(continuous_value, dtype=tf.float32)
+                discrete_value = tf.constant(discrete_value, dtype=tf.float32)
+                # input_array.append(image)
+                # input_array.append(continuous_value)
+                # input_array.append(discrete_value)
+                if input_ids is None:
+                    input_ids = tf.concat([image, continuous_value, discrete_value], axis=1)
+                else:
+                    input_ids = tf.concat(
+                        [input_ids, image, continuous_value, discrete_value], axis=1
+                    )
 
-            logging.debug("input_array size: %s", len(input_array))
-            input_ids = tf.concat(
-                input_array,  # repeat num_observations times
-                axis=1,
-            )
+            logging.info("input_array shape: %s", input_ids.shape)
+            # for i in range(input_ids.shape[1]):
+            #    tf.print("input_ids: ", input_ids[0][i], summarize=20)
+            #    print("==========================")
 
+            # input_ids = tf.concat(
+            #    input_array,  # repeat num_observations times
+            #    axis=1,
+            # )
+            # sys.exit(0)
             # logging.info("input_ids shape: %s", input_ids.shape)
             # tf.print(input_ids[0])
             return input_ids, discrete_array
@@ -215,7 +229,11 @@ class DataLoader:
         return tf.reshape(columns, (row_len, -1))
 
     def load(
-        self, mask_image=False, mask_continuous=False, mask_discrete=False, sliding_batch_size=4
+        self,
+        mask_image=False,
+        mask_continuous=False,
+        mask_discrete=False,
+        sliding_batch_size=4,
     ):
         """Load data from JSON files"""
 
