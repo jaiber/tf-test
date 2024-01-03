@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import sys
+import argparse
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
@@ -58,50 +59,70 @@ class TransformerModel(keras.Model):
         return self.output_layer(x)
 
 
-# Sample data loading and preprocessing
-#imdb = keras.datasets.imdb
-#(train_data, train_labels), (test_data, test_labels) = imdb.load_data(num_words=10000)
+if __name__ == "__main__":
+    # Parse arguments
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--epochs", type=int, default=3)
+    parser.add_argument("--batch_size", type=int, default=32)
+    parser.add_argument("--random_data", action="store_true")
+    args = parser.parse_args()
 
-max_len = 200  # Maximum sequence length
-#train_data = keras.preprocessing.sequence.pad_sequences(train_data, maxlen=max_len)
-#test_data = keras.preprocessing.sequence.pad_sequences(test_data, maxlen=max_len)
+    max_len = 200  # Maximum sequence length
 
-# Trying with random data
-train_data = tf.random.uniform((25000, 200), dtype=tf.float32)
-test_data = tf.random.uniform((25000, 200), dtype=tf.float32)
-train_labels = tf.random.uniform((25000,), minval=0, maxval=2, dtype=tf.int32)
-test_labels = tf.random.uniform((25000,), minval=0, maxval=2, dtype=tf.int32)
-print("train_data: ", train_data.shape)
-print("train_labels: ", train_labels.shape)
-print("test_data: ", test_data.shape)
-print("test_labels: ", test_labels.shape)
-#sys.exit(0)
+    # Sample data loading and preprocessing
+    if not args.random_data:
+        print("Using IMDB data")
+        imdb = keras.datasets.imdb
+        (train_data, train_labels), (test_data, test_labels) = imdb.load_data(
+            num_words=10000
+        )
+        train_data = keras.preprocessing.sequence.pad_sequences(
+            train_data, maxlen=max_len
+        )
+        test_data = keras.preprocessing.sequence.pad_sequences(
+            test_data, maxlen=max_len
+        )
+    else:
+        print("Using random data")
+        train_data = tf.random.uniform((25000, 200), dtype=tf.float32)
+        test_data = tf.random.uniform((25000, 200), dtype=tf.float32)
+        train_labels = tf.random.uniform((25000,), minval=0, maxval=2, dtype=tf.int32)
+        test_labels = tf.random.uniform((25000,), minval=0, maxval=2, dtype=tf.int32)
 
+    print("train_data: ", train_data.shape)
+    print("train_labels: ", train_labels.shape)
+    print("test_data: ", test_data.shape)
+    print("test_labels: ", test_labels.shape)
 
-# Model configuration
-embed_dim = 32
-num_heads = 2
-ff_dim = 32
-input_shape = (max_len,)
-num_classes = 2
+    # Model configuration
+    embed_dim = 32
+    num_heads = 2
+    ff_dim = 32
+    input_shape = (max_len,)
+    num_classes = 2
 
-# Instantiate the model
-model = TransformerModel(embed_dim, num_heads, ff_dim, input_shape, num_classes)
+    # Instantiate the model
+    model = TransformerModel(embed_dim, num_heads, ff_dim, input_shape, num_classes)
 
-# Compile and summarize the model
-model.compile(
-    optimizer=keras.optimizers.AdamW(learning_rate=1e-4),
-    loss="sparse_categorical_crossentropy",
-    metrics=["accuracy"],
-)
+    # Compile and summarize the model
+    model.compile(
+        optimizer=keras.optimizers.AdamW(learning_rate=1e-4),
+        loss="sparse_categorical_crossentropy",
+        metrics=["accuracy"],
+    )
 
+    # Training the model
+    print("Training the model")
+    model.fit(
+        train_data,
+        train_labels,
+        epochs=args.epochs,
+        batch_size=args.batch_size,
+        validation_split=0.2,
+    )
+    model.summary()
 
-# Training the model
-print("Training the model")
-model.fit(train_data, train_labels, epochs=3, batch_size=32, validation_split=0.2)
-model.summary()
-
-# Evaluate on test data
-print("Evaluate on test data")
-test_loss, test_acc = model.evaluate(test_data, test_labels)
-print(f"Test accuracy: {test_acc}")
+    # Evaluate on test data
+    print("Evaluate on test data")
+    test_loss, test_acc = model.evaluate(test_data, test_labels)
+    print(f"Test accuracy: {test_acc}")
