@@ -59,12 +59,23 @@ class TransformerModel(keras.Model):
 
 
 # Sample data loading and preprocessing
-imdb = keras.datasets.imdb
-(train_data, train_labels), (test_data, test_labels) = imdb.load_data(num_words=10000)
+#imdb = keras.datasets.imdb
+#(train_data, train_labels), (test_data, test_labels) = imdb.load_data(num_words=10000)
 
 max_len = 200  # Maximum sequence length
-train_data = keras.preprocessing.sequence.pad_sequences(train_data, maxlen=max_len)
-test_data = keras.preprocessing.sequence.pad_sequences(test_data, maxlen=max_len)
+#train_data = keras.preprocessing.sequence.pad_sequences(train_data, maxlen=max_len)
+#test_data = keras.preprocessing.sequence.pad_sequences(test_data, maxlen=max_len)
+
+# Trying with random data
+train_data = tf.random.uniform((25000, 200), dtype=tf.float32)
+test_data = tf.random.uniform((25000, 200), dtype=tf.float32)
+train_labels = tf.random.uniform((25000,), minval=0, maxval=2, dtype=tf.int32)
+test_labels = tf.random.uniform((25000,), minval=0, maxval=2, dtype=tf.int32)
+print("train_data: ", train_data.shape)
+print("train_labels: ", train_labels.shape)
+print("test_data: ", test_data.shape)
+print("test_labels: ", test_labels.shape)
+#sys.exit(0)
 
 
 # Model configuration
@@ -79,16 +90,18 @@ model = TransformerModel(embed_dim, num_heads, ff_dim, input_shape, num_classes)
 
 # Compile and summarize the model
 model.compile(
-    optimizer=keras.optimizers.Adam(learning_rate=1e-4),
+    optimizer=keras.optimizers.AdamW(learning_rate=1e-4),
     loss="sparse_categorical_crossentropy",
     metrics=["accuracy"],
 )
 
 
 # Training the model
-model.fit(train_data, train_labels, epochs=30, batch_size=32, validation_split=0.2)
+print("Training the model")
+model.fit(train_data, train_labels, epochs=3, batch_size=32, validation_split=0.2)
 model.summary()
 
 # Evaluate on test data
+print("Evaluate on test data")
 test_loss, test_acc = model.evaluate(test_data, test_labels)
 print(f"Test accuracy: {test_acc}")
