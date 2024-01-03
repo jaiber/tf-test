@@ -41,15 +41,19 @@ class Gato(models.Model):
         )
 
         self.flatten = layers.Flatten()
-        self.dense = layers.Dense(3, activation="linear", name="Output")
-        self.softmax = layers.Softmax()
+        self.dense = layers.Dense(3, activation="softmax", name="Output", trainable=trainable)
+        #self.softmax = layers.Softmax(name="Softmax", trainable=trainable)
 
     def call(self, inputs, training=None, mask=None):
         # input_ids with (B, L, 768)
         # encoding with (B, L) or (B,)
         # row_pos and col_pos with tuple of (pos_from, pos_to)
         # obs_pos and obs_mask with (B, L) or (B,)
-        input_ids, (encoding, row_pos, col_pos), (obs_pos, obs_mask) = inputs
+        (
+            (image_tokens),  # continuous_tokens, discrete_tokens),
+            (encoding, row_pos, col_pos),
+            (obs_pos, obs_mask),
+        ) = inputs
 
         """
         # Strip batch dinmension
@@ -79,32 +83,45 @@ class Gato(models.Model):
         # 1 - continuous
         # 2 - discrete (actions, texts)
         encoding = tf.one_hot(encoding, depth=3, dtype=tf.float32)
+        print(">> encoding shape: ", encoding.shape)
+        # tf.print(">> encoding: ", encoding, summarize=-1)
+        # tf.print(">> encoding[..., 0]: ", encoding[..., 0], summarize=-1)
+        # tf.print(">> encoding[..., 1]: ", encoding[..., 1], summarize=-1)
+        # tf.print(">> encoding[..., 2]: ", encoding[..., 2], summarize=-1)
 
         ones = tf.ones(
-            (input_ids.shape[0], input_ids.shape[0], self.config.layer_width),
+            (image_tokens.shape[0], image_tokens.shape[0], self.config.layer_width),
             dtype=tf.float32,
         )
-        image_embed = self.image_embedding((input_ids, (row_pos, col_pos)), training=training)
+        print("image_tokens shape: ", image_tokens.shape)
+        image_embed = self.image_embedding((image_tokens, (row_pos, col_pos)), training=training)
+        print("image_embed shape: ", image_embed.shape)
+        print("image_embed dtype: ", image_embed.dtype)
+        sys.exit(0)
+
+        #tf.print(">> image_embed: ", image_embed, summarize=25)
+        #tf.print(">> encoding[..., 0]: ", encoding[..., 0], summarize=-1)
         image_embed *= encoding[..., 0].transpose().matmul(ones)  # image patch masking
 
         # continuous value takes from first value of input_ids
-        continuous_embed = self.continuous_encoding(input_ids[..., 0])
-        continuous_embed = self.discrete_embedding(continuous_embed)
-        continuous_embed *= encoding[..., 1].transpose().matmul(ones)  # continuous value masking
+        #continuous_embed = self.continuous_encoding(input_ids[..., 0])
+        #continuous_embed = self.discrete_embedding(continuous_embed)
+        #continuous_embed *= encoding[..., 1].transpose().matmul(ones)  # continuous value masking
 
-        discrete_embed = self.discrete_embedding(input_ids[..., 0])
-        discrete_embed *= encoding[..., 2].transpose().matmul(ones)  # discrete value masking
+        #discrete_embed = self.discrete_embedding(input_ids[..., 0])
+        #discrete_embed *= encoding[..., 2].transpose().matmul(ones)  # discrete value masking
 
         # Appendix C.3. Position Encodings > Local Observation Position Encodings
         # add local observation position encodings
-        embed = image_embed + continuous_embed + discrete_embed
-        embed += self.local_pos_encoding((obs_pos, obs_mask))
+        embed = image_embed
+        #embed = image_embed + continuous_embed + discrete_embed
+        #embed += self.local_pos_encoding((obs_pos, obs_mask))
         hidden_states = self.transformer(embed)
 
         output = self.flatten(hidden_states)
         # Add dense softmax layer
         output = self.dense(output)
-        output = self.softmax(output)
+        #output = self.softmax(output)
         # tf.print(">> output: ", output)
         output = tf.expand_dims(output, axis=1)
         return output
@@ -183,7 +200,11 @@ class PatchEmbedding(models.Model):
         patch_size = self.config.img_patch_size
         depth = self.config.input_dim // (patch_size * patch_size)
 
+        # tf.print(">> input_ids: ", input_ids, summarize=20)
+        #tf.print("input_ids shape: ", input_ids.shape)
         x = input_ids.reshape((-1, input_ids.shape[1], patch_size, patch_size, depth))
+        #tf.print("x shape: ", x.shape)
+        # tf.print(">> x: ", x, summarize=2)
         x = self.residual_embedding(x)
         x = self.pos_encoding((x, (row_pos, col_pos)))
         return x

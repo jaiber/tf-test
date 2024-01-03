@@ -51,19 +51,42 @@ class DataLoader:
             padding="VALID",
         )
         logging.debug("  patch extracted image: %s", image.shape)
+        
+        """
+        # Code to save each patch as png image, for debugging
+        image = tf.reshape(image, (1, self.num_patches, self.input_dim))
+        logging.info("  patch extracted image: %s", image.shape)
+
+        # Save each patch as png images
+        for i in range(self.num_patches):
+            patch = image[0, i, :]
+            patch = tf.reshape(patch, (16, 16, 3))
+            patch = tf.image.convert_image_dtype(patch, dtype=tf.uint8)
+            patch = tf.image.encode_png(patch)
+            patch_file = "patch-" + str(i) + ".png"
+            tf.io.write_file(patch_file, patch)
+            logging.debug("  patch: %s", patch_file)
+
+        sys.exit(0)
+        """
 
         # Reshape to (1, num_patches, input_dim)
         return tf.reshape(image, (1, self.num_patches, self.input_dim))
 
-    def create_encoding(self):
+    def create_encoding(self, continuous_dim=True, discrete_dim=True):
         """Create sequence encoding tensor"""
         arr = []
 
         # 0 - image patch embedding
         # 1 - continuous value embedding
         # 2 - discrete embedding (actions, texts)
+        value = [0] * self.num_patches
+        if continuous_dim:
+            value += [1]
+        if discrete_dim:
+            value += [2]
         for i in range(self.num_observations):
-            arr.extend([0] * self.num_patches + [1, 2])
+            arr.extend(value)
         # logging.debug("encoding: %s", arr)
 
         logging.debug("Creating encoding..")
@@ -94,7 +117,7 @@ class DataLoader:
         # row_pos from
         arr1 = [i / self.y_scale for i in range(self.y_scale)]
         arr1 *= self.x_scale
-        arr1.extend([0, 0])
+        # arr1.extend([0, 0]) # For continuous and discrete values
         # Repeat this array num_observations times
         arr1 *= self.num_observations
         logging.debug(" arr1: %s", arr1)
@@ -102,7 +125,7 @@ class DataLoader:
         # row_pos to
         arr2 = [(i + 1) / self.y_scale for i in range(self.y_scale)]
         arr2 *= self.x_scale
-        arr2.extend([0, 0])
+        # arr2.extend([0, 0]) # For continuous and discrete values
         # Repeat this array num_observationss times
         arr2 *= self.num_observations
         logging.debug(" arr2: %s", arr2)
@@ -122,7 +145,7 @@ class DataLoader:
         for i in range(self.x_scale):
             arr1.extend([i / self.x_scale] * self.y_scale)
 
-        arr1.extend([0, 0])
+        # arr1.extend([0, 0])
         # Repeat this array num_observations times
         arr1 *= self.num_observations
         logging.debug(" arr1: %s", arr1)
@@ -130,7 +153,7 @@ class DataLoader:
         for i in range(self.x_scale):
             arr2.extend([(i + 1) / self.x_scale] * self.y_scale)
 
-        arr2.extend([0, 0])
+        # arr2.extend([0, 0])
         # Repeat this array num_observations times
         arr2 *= self.num_observations
         logging.debug(" arr2: %s", arr2)
@@ -145,7 +168,8 @@ class DataLoader:
 
         logging.debug("Creating obs..")
         # obs token
-        arr1 = [i for i in range(self.num_patches + 2)]
+        #arr1 = [i for i in range(self.num_patches + 2)]
+        arr1 = [i for i in range(self.num_patches)]
         arr1 = arr1 * self.num_observations
         logging.debug("arr1: %s", arr1)
 
@@ -153,7 +177,7 @@ class DataLoader:
         cmask = [0] if mask_continuous else [1]
         dmask = [0] if mask_discrete else [1]
 
-        arr2 = imask * (self.num_patches) + cmask + dmask  # Don't mask discrete tokens
+        arr2 = imask * (self.num_patches)  # + cmask + dmask  # Don't mask discrete tokens
         arr2 = arr2 * self.num_observations
         logging.debug("arr2: %s", arr2)
 
@@ -165,10 +189,11 @@ class DataLoader:
     def process_episode(self, episode_config_file, prefix):
         """Process episode config file and create input_ids tensor"""
 
-        input_ids = (
-            None  # tf.Variable(tf.constant([], shape=(0, 1, self.input_dim), dtype=tf.float32))
-        )
+        image_array = []
+        continuous_array = []
         discrete_array = []
+        action_array = []
+        axis = 0
 
         logging.debug("Loading episode_config: %s", episode_config_file)
         # Load episode config
@@ -188,39 +213,23 @@ class DataLoader:
                 continuous_value = self.encode_continuous_value(key["jointAngles"])
                 discrete_value = self.encode_discrete_value(key["action"])
 
-                # Check if its last step
-                if key == episode_config["steps"][-1]:
-                    discrete_array.append(0)  # 0 since alignment achieved
-                else:
-                    discrete_array.append(key["action"])
+                #x = 0 if key == episode_config["steps"][-1] else key["action"]
+                action_array.append(key["action"])
 
-                # convert to tensor
-                image = tf.constant(image, dtype=tf.float32)
-                continuous_value = tf.constant(continuous_value, dtype=tf.float32)
-                discrete_value = tf.constant(discrete_value, dtype=tf.float32)
-                # input_array.append(image)
-                # input_array.append(continuous_value)
-                # input_array.append(discrete_value)
-                if input_ids is None:
-                    input_ids = tf.concat([image, continuous_value, discrete_value], axis=1)
-                else:
-                    input_ids = tf.concat(
-                        [input_ids, image, continuous_value, discrete_value], axis=1
-                    )
+                # Append to tensors
+                image_array.append(tf.constant(image, dtype=tf.float32))
+                continuous_array.append(tf.constant(continuous_value, dtype=tf.float32))
+                discrete_array.append(tf.constant(discrete_value, dtype=tf.float32))
 
-            logging.info("input_array shape: %s", input_ids.shape)
-            # for i in range(input_ids.shape[1]):
-            #    tf.print("input_ids: ", input_ids[0][i], summarize=20)
-            #    print("==========================")
+            # Concatenate tensors
+            image_tensor = tf.concat(image_array, axis=axis)
+            continuous_tensor = tf.concat(continuous_array, axis=axis)
+            discrete_tensor = tf.concat(discrete_array, axis=axis)
+            logging.info(" image_tensor shape: %s", image_tensor.shape)
+            logging.info("  continuous_tensor shape: %s", continuous_tensor.shape)
+            logging.info("   discrete_tensor shape: %s", discrete_tensor.shape)
 
-            # input_ids = tf.concat(
-            #    input_array,  # repeat num_observations times
-            #    axis=1,
-            # )
-            # sys.exit(0)
-            # logging.info("input_ids shape: %s", input_ids.shape)
-            # tf.print(input_ids[0])
-            return input_ids, discrete_array
+            return image_tensor, continuous_tensor, discrete_tensor, action_array
 
     def re_encode(self, input, row_len, col_dups):
         """Re-encode input to sliding window"""
@@ -256,12 +265,16 @@ class DataLoader:
         self.x_scale = self.x_size // 16
         self.y_scale = self.y_size // 16
 
-        all_ids = None
+        image_tensors = None
+        continuous_tensors = None
+        discrete_tensors = None
+        action_tensors = None
+
         all_encoding = None
         all_row_pos = None
         all_col_pos = None
         all_obs = None
-        all_discrete = None
+        all_actions = None
         axis = 0
 
         # Loop through each episode config file
@@ -270,26 +283,35 @@ class DataLoader:
             episode_config_file = prefix + self.config["episodes"][i]
             logging.debug("episode_config_file: %s", episode_config_file)
 
-            input_ids, discrete_array = self.process_episode(episode_config_file, prefix=prefix)
-            logging.debug("input_ids shape: %s", input_ids.shape)
-
-            # print (">> discrete_array: ", discrete_array)
+            # input_ids, discrete_array = self.process_episode(episode_config_file, prefix=prefix)
+            image_tensor, continuous_tensor, discrete_tensor, action_array = self.process_episode(
+                episode_config_file, prefix=prefix
+            )
 
             # Convert discrete_array to tensor
-            discrete_array = tf.constant([discrete_array], dtype=tf.int32)
+            action_array = tf.constant([action_array], dtype=tf.int32)
+            #print("action_array: ", action_array.numpy())
             # one hot encoding
-            discrete_array = tf.one_hot(discrete_array, depth=3, dtype=tf.int32)
+            action_array = tf.one_hot(action_array, depth=3, dtype=tf.int32)
+            #print("action_array: ", action_array.numpy())
+            action_array = tf.transpose(action_array, perm=[1, 0, 2])
+            #print("action_array: ", action_array.numpy())
+            #print("action array shape: ", action_array.shape)
             # tf.print("discrete_array: ", discrete_array)
 
             # Append to all_ods
-            if all_ids is None:
-                all_ids = input_ids
-                all_discrete = discrete_array
+            if image_tensors is None:
+                image_tensors = image_tensor
+                continuous_tensors = continuous_tensor
+                discrete_tensors = discrete_tensor
+                all_actions = action_array
             else:
-                all_ids = tf.concat([all_ids, input_ids], axis=axis)
-                all_discrete = tf.concat([all_discrete, discrete_array], axis=axis)
+                image_tensors = tf.concat([image_tensors, image_tensor], axis=axis)
+                continuous_tensors = tf.concat([continuous_tensors, continuous_tensor], axis=axis)
+                discrete_tensors = tf.concat([discrete_tensors, discrete_tensor], axis=axis)
+                all_actions = tf.concat([all_actions, action_array], axis=axis)
 
-            encoding = self.create_encoding()
+            encoding = self.create_encoding(continuous_dim=False, discrete_dim=False)
             logging.debug(" encoding shape: %s", encoding)
             # Append to all_encoding
             if all_encoding is None:
@@ -336,27 +358,71 @@ class DataLoader:
             logging.debug("  obs shape: %s, %s", obs[0].shape, obs[1].shape)
 
         # Print shapes
-        logging.info("all_ids shape: %s", all_ids.shape)
-        logging.info("all_discrete shape: %s", all_discrete.shape)
+        logging.info("image_tensors shape: %s", image_tensors.shape)
+        logging.info("continuous_tensors shape: %s", continuous_tensors.shape)
+        logging.info("discrete_tensors shape: %s", discrete_tensors.shape)
+        logging.info("all_actions shape: %s", all_actions.shape)
         logging.info("all_encoding shape: %s", all_encoding.shape)
         logging.info("all_row_pos shape: %s, %s", all_row_pos[0].shape, all_row_pos[1].shape)
         logging.info("all_col_pos shape: %s, %s", all_col_pos[0].shape, all_col_pos[1].shape)
         logging.info("all_obs shape: %s, %s", all_obs[0].shape, all_obs[1].shape)
 
-        print("====================================")
+        # Shift actions by 1 step, and append [1, 0, 0] (0) - no action at the end
+        actions = tf.concat([all_actions[1:], [[[1, 0, 0]]]], axis=0)
+        print("all actions: ", all_actions.shape)
+        print("actions: ", actions.shape)
 
-        num_batches = all_ids.shape[0]
+        # Reshape factor for vertical stacking
+        reshape_factor = self.num_observations * self.num_episodes
+        print("reshape_factor: ", reshape_factor)
+        
+        # Reshape all_encoding, example: from (1, 120) to (6, 20)
+        all_encoding = tf.reshape(all_encoding, (reshape_factor, -1))
+        logging.info("all_encoding shape: %s", all_encoding.shape)
+        all_row_pos = (
+            tf.reshape(all_row_pos[0], (reshape_factor, -1)),
+            tf.reshape(all_row_pos[1], (reshape_factor, -1)),
+        )
+        logging.info("all_row_pos shape: %s, %s", all_row_pos[0].shape, all_row_pos[1].shape)
+        all_col_pos = (
+            tf.reshape(all_col_pos[0], (reshape_factor, -1)),
+            tf.reshape(all_col_pos[1], (reshape_factor, -1)),
+        )
+        logging.info("all_col_pos shape: %s, %s", all_col_pos[0].shape, all_col_pos[1].shape)
+        all_obs = (
+            tf.reshape(all_obs[0], (reshape_factor, -1)),
+            tf.reshape(all_obs[1], (reshape_factor, -1)),
+        )
+        logging.info("all_obs shape: %s, %s", all_obs[0].shape, all_obs[1].shape)
+
+        return (
+            image_tensors,
+            continuous_tensors,
+            discrete_tensors,
+            all_encoding,
+            all_row_pos,
+            all_col_pos,
+            all_obs,
+            actions,
+        )
+
+
+        print("==========Re-arranging to 4 sliding windows ======================")
+
+        num_batches = image_tensors.shape[0]
         multiplier = sliding_batch_size * num_batches
 
         # There are 132 tokens for 6 observations, each observation has 22 tokens
-        input_ids = all_ids[:, :66, :]
-        input_ids = tf.concat([input_ids, all_ids[:, 22:88, :]], axis=0)
-        input_ids = tf.concat([input_ids, all_ids[:, 44:110, :]], axis=0)
-        input_ids = tf.concat([input_ids, all_ids[:, 66:, :]], axis=0)
+        image = image_tensors[:, :60, :]
+        image = tf.concat([image, image_tensors[:, 20:80, :]], axis=0)
+        image = tf.concat([image, image_tensors[:, 40:100, :]], axis=0)
+        image = tf.concat([image, image_tensors[:, 60:, :]], axis=0)
 
         # Discrete values advaced by 3 steps
-        discrete = tf.gather(all_discrete, [2, 3, 4, 5], axis=1)
-        discrete = tf.reshape(discrete, (multiplier, 1, 3))
+        # tf.print("all_actions: ", all_actions, summarize=-1)
+        actions = tf.gather(all_actions, [2, 3, 4, 5], axis=1)
+        actions = tf.reshape(actions, (multiplier, 1, 3))
+        # tf.print("actions: ", actions, summarize=-1)
 
         encoding = self.re_encode(all_encoding, multiplier, 2)
 
@@ -375,11 +441,19 @@ class DataLoader:
             self.re_encode(all_obs[1], multiplier, 2),
         )
 
-        logging.info(" input_ids shape: %s", input_ids.shape)
-        logging.info(" discrete shape: %s", discrete.shape)
+        logging.info(" image shape: %s", image.shape)
+        logging.info(" actions shape: %s", actions.shape)
         logging.info(" encoding shape: %s", encoding.shape)
         logging.info(" row_pos shape: %s, %s", row_pos[0].shape, row_pos[1].shape)
         logging.info(" col_pos shape: %s, %s", col_pos[0].shape, col_pos[1].shape)
         logging.info(" obs shape: %s, %s", obs[0].shape, obs[1].shape)
-
-        return (input_ids, encoding, row_pos, col_pos, obs, discrete)
+        return (
+            image,
+            continuous_tensors,
+            discrete_tensors,
+            encoding,
+            row_pos,
+            col_pos,
+            obs,
+            actions,
+        )
